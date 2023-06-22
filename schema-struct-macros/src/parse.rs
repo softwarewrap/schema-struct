@@ -1,7 +1,8 @@
 use crate::schema::JsonSchema;
 use convert_case::{Case, Casing};
 use proc_macro::TokenStream;
-use proc_macro2::TokenStream as TokenStream2;
+use proc_macro2::{Span, TokenStream as TokenStream2};
+use proc_macro_crate::{crate_name, FoundCrate};
 use quote::{format_ident, quote};
 use regex::Regex;
 use serde_json::{Map, Value};
@@ -323,6 +324,7 @@ fn parse_array(
     name_prefix: &str,
     vis: &Visibility,
     required: bool,
+    internal_path: &TokenStream2,
 ) -> Result<ParsedValue, String> {
     let (rust_name, json_name) = renamed_field(name);
     let name_ident = format_ident!("{}", rust_name);
@@ -365,12 +367,14 @@ fn parse_array(
             inner_string.ty
         }
         "array" => {
-            let inner_array = parse_array(items_value, name, name_prefix, vis, required)?;
+            let inner_array =
+                parse_array(items_value, name, name_prefix, vis, required, internal_path)?;
             defs = inner_array.defs;
             inner_array.ty
         }
         "object" => {
-            let inner_object = parse_object(items_value, name, name_prefix, vis, required)?;
+            let inner_object =
+                parse_object(items_value, name, name_prefix, vis, required, internal_path)?;
             defs = inner_object.defs;
             inner_object.ty
         }
@@ -402,6 +406,7 @@ fn parse_object(
     name_prefix: &str,
     vis: &Visibility,
     required: bool,
+    internal_path: &TokenStream2,
 ) -> Result<ParsedValue, String> {
     let (rust_name, json_name) = renamed_field(name);
     let struct_name = renamed_struct(name);
@@ -451,6 +456,7 @@ fn parse_object(
             &prop_name_prefix,
             vis,
             required_props.contains(property_name.as_str()),
+            internal_path,
         )?;
 
         let renamed_attr = if let Some(renamed) = rename {
@@ -473,7 +479,7 @@ fn parse_object(
     let mut defs = parsed_prop_defs;
     defs.push(quote! {
         #[doc = #def_doc]
-        #[derive(::serde::Serialize, ::serde::Deserialize, Debug, Clone, PartialEq)]
+        #[derive(#internal_path::serde::Serialize, #internal_path::serde::Deserialize, Debug, Clone, PartialEq)]
         #vis struct #struct_name_ident {
             #(#parsed_prop_fields)*
         }
@@ -483,13 +489,13 @@ fn parse_object(
     impls.push(quote! {
         impl #struct_name_ident {
             /// Deserializes a JSON string into this type.
-            pub fn from_str(json: &str) -> ::serde_json::Result<Self> {
-                serde_json::from_str(json)
+            pub fn from_str(json: &str) -> #internal_path::serde_json::Result<Self> {
+                #internal_path::serde_json::from_str(json)
             }
 
             /// Serializes this type into a JSON string.
-            pub fn to_str(&self) -> ::serde_json::Result<String> {
-                serde_json::to_string(self)
+            pub fn to_str(&self) -> #internal_path::serde_json::Result<String> {
+                #internal_path::serde_json::to_string(self)
             }
         }
     });
@@ -517,6 +523,7 @@ fn parse_value(
     name_prefix: &str,
     vis: &Visibility,
     required: bool,
+    internal_path: &TokenStream2,
 ) -> Result<ParsedValue, String> {
     let value_type = value
         .get("type")
@@ -530,8 +537,8 @@ fn parse_value(
         "integer" => parse_integer(value, name, required),
         "number" => parse_number(value, name, required),
         "string" => parse_string(value, name, required),
-        "array" => parse_array(value, name, name_prefix, vis, required),
-        "object" => parse_object(value, name, name_prefix, vis, required),
+        "array" => parse_array(value, name, name_prefix, vis, required, internal_path),
+        "object" => parse_object(value, name, name_prefix, vis, required, internal_path),
         unknown_type => Err(format!("unknown JSON value type '{}'", unknown_type)),
     }
 }
@@ -564,6 +571,14 @@ pub fn parse_from_schema(input: TokenStream) -> TokenStream {
         }
     };
 
+    let internal_path = match crate_name("schema-struct") {
+        Ok(FoundCrate::Name(name)) => {
+            let ident = Ident::new(&name, Span::call_site());
+            quote!(::#ident::__internal)
+        }
+        _ => quote!(::schema_struct::__internal),
+    };
+
     let ParsedValue {
         defs: schema_defs,
         impls: schema_impls,
@@ -574,6 +589,7 @@ pub fn parse_from_schema(input: TokenStream) -> TokenStream {
         "",
         &vis.unwrap_or(Visibility::Inherited),
         true,
+        &internal_path,
     ) {
         Ok(value) => value,
         Err(e) => {

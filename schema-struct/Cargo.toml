@@ -1,0 +1,9 @@
+[package]
+name = "schema-struct"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+schema-struct-macros = { version = "0.1.0", path = "../schema-struct-macros" }
+serde = "1"
+serde_json = "1"

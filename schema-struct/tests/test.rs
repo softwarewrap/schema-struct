@@ -43,7 +43,7 @@ fn test_from_schema() {
 /// Test constructing a struct from a schema in a file.
 #[test]
 fn test_from_file() {
-    schema_struct!(file = "tests/schemas/product.json");
+    schema_struct!(file = "schema-struct/tests/schemas/product.json");
 
     let product_json = "{\"id\":5,\"name\":\"product name\",\"price\":12.34}";
     let product = Product::from_str(product_json).unwrap();
@@ -537,13 +537,13 @@ fn test_vis() {
         schema_struct!(
             vis = pub,
             ident = PublicProduct,
-            file = "tests/schemas/product.json"
+            file = "schema-struct/tests/schemas/product.json"
         );
 
         schema_struct!(
             vis = ,
             ident = PrivateProduct,
-            file = "tests/schemas/product.json"
+            file = "schema-struct/tests/schemas/product.json"
         );
     }
 
@@ -561,7 +561,7 @@ fn test_vis() {
 fn test_custom_ident() {
     schema_struct!(
         ident = CustomIdentifier,
-        file = "tests/schemas/product.json"
+        file = "schema-struct/tests/schemas/product.json"
     );
 
     let product_json = "{\"id\":5,\"name\":\"product name\",\"price\":12.34}";
