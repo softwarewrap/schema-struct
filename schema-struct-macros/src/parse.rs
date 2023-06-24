@@ -112,12 +112,14 @@ impl Parse for SchemaStructConfig {
 }
 
 /// Retrieves a string property from a JSON value.
-fn get_prop_str(value: &Value, prop: &str) -> Option<String> {
-    value.as_object().and_then(|obj| {
-        obj.get(prop)
-            .and_then(|title| title.as_str())
-            .map(|s| s.to_owned())
-    })
+fn get_prop_str(value: &Value, prop: &str) -> Result<Option<String>, String> {
+    match value.get(prop) {
+        Some(prop_value) => prop_value
+            .as_str()
+            .ok_or(format!("expected property `{}` to be a string", prop))
+            .map(|s| Some(s.to_owned())),
+        None => Ok(None),
+    }
 }
 
 /// Nicely formats a Rust token stream.
@@ -172,6 +174,74 @@ fn renamed_struct(name: &str) -> String {
         .collect::<String>()
 }
 
+/// Takes a JSON object name and returns a valid enum name for the object.
+fn renamed_enum(name: &str) -> String {
+    renamed_struct(name)
+}
+
+/// Takes a JSON string from an enum array and returns a valid enum variant name.
+fn renamed_enum_variant(name: &str) -> String {
+    renamed_struct(name)
+}
+
+/// A JSON value type.
+enum ValueType {
+    Null,
+    Boolean,
+    Integer,
+    Number,
+    String,
+    Array,
+    Object,
+    Enum,
+    Tuple,
+    /// An unrecognized value type.
+    Unknown(String),
+}
+
+impl ValueType {
+    pub fn from_str(s: &str) -> Self {
+        match s {
+            "null" => Self::Null,
+            "boolean" => Self::Boolean,
+            "integer" => Self::Integer,
+            "number" => Self::Number,
+            "string" => Self::String,
+            "array" => Self::Array,
+            "object" => Self::Object,
+            "enum" => Self::Enum,
+            "tuple" => Self::Tuple,
+            unknown => Self::Unknown(unknown.to_owned()),
+        }
+    }
+}
+
+/// Parses a JSON value's type.
+fn parse_value_type(value: &Value) -> Result<ValueType, String> {
+    Ok(ValueType::from_str(match value.get("type") {
+        Some(ty) => {
+            match ty
+                .as_str()
+                .ok_or("value type must be a string".to_owned())?
+            {
+                "array" => {
+                    if value.get("prefixItems").is_some() {
+                        "tuple"
+                    } else {
+                        "array"
+                    }
+                }
+                ty_str => ty_str,
+            }
+        }
+        None => value
+            .get("enum")
+            .is_some()
+            .then_some("enum")
+            .ok_or("value type not specified".to_owned())?,
+    }))
+}
+
 /// A representation of a value parsed from a JSON schema.
 #[derive(Debug, Clone)]
 struct ParsedValue {
@@ -192,13 +262,11 @@ struct ParsedValue {
 }
 
 /// Parses a schema value of type `null`.
-fn parse_null(null: &Value, name: &str, required: bool) -> Result<ParsedValue, String> {
+fn parse_null(null_value: &Value, name: &str, required: bool) -> Result<ParsedValue, String> {
     let (rust_name, json_name) = renamed_field(name);
     let name_ident = format_ident!("{}", rust_name);
 
-    let description = null
-        .get("description")
-        .and_then(|description| description.as_str());
+    let description = get_prop_str(null_value, "description")?;
 
     let ty = if required {
         quote!(())
@@ -209,7 +277,7 @@ fn parse_null(null: &Value, name: &str, required: bool) -> Result<ParsedValue, S
     Ok(ParsedValue {
         defs: vec![],
         impls: vec![],
-        doc: description.unwrap_or_default().to_owned(),
+        doc: description.unwrap_or_default(),
         rename: json_name,
         name: name_ident,
         ty,
@@ -217,13 +285,11 @@ fn parse_null(null: &Value, name: &str, required: bool) -> Result<ParsedValue, S
 }
 
 /// Parses a schema value of type `boolean`.
-fn parse_boolean(boolean: &Value, name: &str, required: bool) -> Result<ParsedValue, String> {
+fn parse_boolean(boolean_value: &Value, name: &str, required: bool) -> Result<ParsedValue, String> {
     let (rust_name, json_name) = renamed_field(name);
     let name_ident = format_ident!("{}", rust_name);
 
-    let description = boolean
-        .get("description")
-        .and_then(|description| description.as_str());
+    let description = get_prop_str(boolean_value, "description")?;
 
     let ty = if required {
         quote!(bool)
@@ -234,7 +300,7 @@ fn parse_boolean(boolean: &Value, name: &str, required: bool) -> Result<ParsedVa
     Ok(ParsedValue {
         defs: vec![],
         impls: vec![],
-        doc: description.unwrap_or_default().to_owned(),
+        doc: description.unwrap_or_default(),
         rename: json_name,
         name: name_ident,
         ty,
@@ -242,13 +308,11 @@ fn parse_boolean(boolean: &Value, name: &str, required: bool) -> Result<ParsedVa
 }
 
 /// Parses a schema value of type `integer`.
-fn parse_integer(integer: &Value, name: &str, required: bool) -> Result<ParsedValue, String> {
+fn parse_integer(integer_value: &Value, name: &str, required: bool) -> Result<ParsedValue, String> {
     let (rust_name, json_name) = renamed_field(name);
     let name_ident = format_ident!("{}", rust_name);
 
-    let description = integer
-        .get("description")
-        .and_then(|description| description.as_str());
+    let description = get_prop_str(integer_value, "description")?;
 
     let ty = if required {
         quote!(i64)
@@ -259,7 +323,7 @@ fn parse_integer(integer: &Value, name: &str, required: bool) -> Result<ParsedVa
     Ok(ParsedValue {
         defs: vec![],
         impls: vec![],
-        doc: description.unwrap_or_default().to_owned(),
+        doc: description.unwrap_or_default(),
         rename: json_name,
         name: name_ident,
         ty,
@@ -267,13 +331,11 @@ fn parse_integer(integer: &Value, name: &str, required: bool) -> Result<ParsedVa
 }
 
 /// Parses a schema value of type `number`.
-fn parse_number(number: &Value, name: &str, required: bool) -> Result<ParsedValue, String> {
+fn parse_number(number_value: &Value, name: &str, required: bool) -> Result<ParsedValue, String> {
     let (rust_name, json_name) = renamed_field(name);
     let name_ident = format_ident!("{}", rust_name);
 
-    let description = number
-        .get("description")
-        .and_then(|description| description.as_str());
+    let description = get_prop_str(number_value, "description")?;
 
     let ty = if required {
         quote!(f64)
@@ -284,7 +346,7 @@ fn parse_number(number: &Value, name: &str, required: bool) -> Result<ParsedValu
     Ok(ParsedValue {
         defs: vec![],
         impls: vec![],
-        doc: description.unwrap_or_default().to_owned(),
+        doc: description.unwrap_or_default(),
         rename: json_name,
         name: name_ident,
         ty,
@@ -292,13 +354,11 @@ fn parse_number(number: &Value, name: &str, required: bool) -> Result<ParsedValu
 }
 
 /// Parses a schema value of type `string`.
-fn parse_string(string: &Value, name: &str, required: bool) -> Result<ParsedValue, String> {
+fn parse_string(string_value: &Value, name: &str, required: bool) -> Result<ParsedValue, String> {
     let (rust_name, json_name) = renamed_field(name);
     let name_ident = format_ident!("{}", rust_name);
 
-    let description = string
-        .get("description")
-        .and_then(|description| description.as_str());
+    let description = get_prop_str(string_value, "description")?;
 
     let ty = if required {
         quote!(String)
@@ -309,7 +369,7 @@ fn parse_string(string: &Value, name: &str, required: bool) -> Result<ParsedValu
     Ok(ParsedValue {
         defs: vec![],
         impls: vec![],
-        doc: description.unwrap_or_default().to_owned(),
+        doc: description.unwrap_or_default(),
         rename: json_name,
         name: name_ident,
         ty,
@@ -319,7 +379,7 @@ fn parse_string(string: &Value, name: &str, required: bool) -> Result<ParsedValu
 /// Parses a schema value of type `array`. Because Rust is strongly typed, the
 /// type of items in the array must be specified in the schema.
 fn parse_array(
-    array: &Value,
+    array_value: &Value,
     name: &str,
     name_prefix: &str,
     vis: &Visibility,
@@ -328,57 +388,61 @@ fn parse_array(
 ) -> Result<ParsedValue, String> {
     let (rust_name, json_name) = renamed_field(name);
     let name_ident = format_ident!("{}", rust_name);
-    let empty_map = Map::new();
 
-    let description = array
-        .get("description")
-        .and_then(|description| description.as_str());
-    let items_value = array
+    let description = get_prop_str(array_value, "description")?;
+    let items_value = array_value
         .get("items")
         .ok_or("array must have property 'items'".to_owned())?;
-    let items = items_value.as_object().unwrap_or(&empty_map);
-    let item_type = items
-        .get("type")
-        .ok_or("array item type not specified".to_owned())?
-        .as_str()
-        .ok_or("array item type must be a string".to_owned())?;
+    let parsed_item_type = parse_value_type(items_value)?;
 
     let mut defs = vec![];
 
-    let item_type_token = match item_type {
-        "null" => {
+    let item_type_token = match parsed_item_type {
+        ValueType::Null => {
             let inner_null = parse_null(items_value, name, required)?;
             inner_null.ty
         }
-        "boolean" => {
+        ValueType::Boolean => {
             let inner_boolean = parse_boolean(items_value, name, required)?;
             inner_boolean.ty
         }
-        "integer" => {
+        ValueType::Integer => {
             let inner_integer = parse_integer(items_value, name, required)?;
             inner_integer.ty
         }
-        "number" => {
+        ValueType::Number => {
             let inner_number = parse_number(items_value, name, required)?;
             inner_number.ty
         }
-        "string" => {
+        ValueType::String => {
             let inner_string = parse_string(items_value, name, required)?;
             inner_string.ty
         }
-        "array" => {
+        ValueType::Array => {
             let inner_array =
                 parse_array(items_value, name, name_prefix, vis, required, internal_path)?;
             defs = inner_array.defs;
             inner_array.ty
         }
-        "object" => {
+        ValueType::Object => {
             let inner_object =
                 parse_object(items_value, name, name_prefix, vis, required, internal_path)?;
             defs = inner_object.defs;
             inner_object.ty
         }
-        unknown_type => {
+        ValueType::Enum => {
+            let inner_enum =
+                parse_enum(items_value, name, name_prefix, vis, required, internal_path)?;
+            defs = inner_enum.defs;
+            inner_enum.ty
+        }
+        ValueType::Tuple => {
+            let inner_tuple =
+                parse_tuple(items_value, name, name_prefix, vis, required, internal_path)?;
+            defs = inner_tuple.defs;
+            inner_tuple.ty
+        }
+        ValueType::Unknown(unknown_type) => {
             return Err(format!("unknown array item type '{}'", unknown_type));
         }
     };
@@ -392,7 +456,7 @@ fn parse_array(
     Ok(ParsedValue {
         defs,
         impls: vec![],
-        doc: description.unwrap_or_default().to_owned(),
+        doc: description.unwrap_or_default(),
         rename: json_name,
         name: name_ident,
         ty,
@@ -401,7 +465,7 @@ fn parse_array(
 
 /// Parses a schema value of type `object`.
 fn parse_object(
-    object: &Value,
+    object_value: &Value,
     name: &str,
     name_prefix: &str,
     vis: &Visibility,
@@ -414,14 +478,12 @@ fn parse_object(
     let struct_name_ident = format_ident!("{}{}", name_prefix, struct_name);
     let empty_map = Map::new();
 
-    let description = object
-        .get("description")
-        .and_then(|description| description.as_str());
-    let properties = object
+    let description = get_prop_str(object_value, "description")?;
+    let properties = object_value
         .get("properties")
         .and_then(|props| props.as_object())
         .unwrap_or(&empty_map);
-    let required_props = object
+    let required_props = object_value
         .get("required")
         .and_then(|required| required.as_array())
         .map(|required_array| {
@@ -474,7 +536,7 @@ fn parse_object(
         });
     }
 
-    let def_doc = description.unwrap_or_default().to_owned();
+    let def_doc = description.unwrap_or_default();
 
     let mut defs = parsed_prop_defs;
     defs.push(quote! {
@@ -516,6 +578,134 @@ fn parse_object(
     })
 }
 
+/// Parses a schema value of an enum type.
+fn parse_enum(
+    enum_value: &Value,
+    name: &str,
+    name_prefix: &str,
+    vis: &Visibility,
+    required: bool,
+    internal_path: &TokenStream2,
+) -> Result<ParsedValue, String> {
+    let (rust_name, json_name) = renamed_field(name);
+    let enum_name = renamed_enum(name);
+    let name_ident = format_ident!("{}", rust_name);
+    let enum_name_ident = format_ident!("{}{}", name_prefix, enum_name);
+
+    let description = get_prop_str(enum_value, "description")?;
+    let variants = enum_value
+        .get("enum")
+        .ok_or("no enum variants specified".to_owned())?
+        .as_array()
+        .ok_or("enum variants must be specified as an array".to_owned())?;
+
+    let mut variant_defs = Vec::new();
+
+    for variant in variants {
+        let variant_name = variant
+            .as_str()
+            .ok_or("enum variants must be strings".to_owned())?;
+        let variant_ident = format_ident!("{}", renamed_enum_variant(variant_name));
+        variant_defs.push(quote! {
+            #[serde(rename = #variant_name)]
+            #variant_ident,
+        });
+    }
+
+    let def_doc = description.unwrap_or_default();
+
+    let defs = vec![quote! {
+        #[doc = #def_doc]
+        #[derive(#internal_path::serde::Serialize, #internal_path::serde::Deserialize, Debug, Clone, Copy, PartialEq)]
+        #vis enum #enum_name_ident {
+            #(#variant_defs)*
+        }
+    }];
+
+    let impls = vec![quote! {
+        impl #enum_name_ident {
+            /// Deserializes a JSON string into this type.
+            pub fn from_str(json: &str) -> #internal_path::serde_json::Result<Self> {
+                #internal_path::serde_json::from_str(json)
+            }
+
+            /// Serializes this type into a JSON string.
+            pub fn to_str(&self) -> #internal_path::serde_json::Result<String> {
+                #internal_path::serde_json::to_string(self)
+            }
+        }
+    }];
+
+    let ty = if required {
+        quote!(#enum_name_ident)
+    } else {
+        quote!(Option<#enum_name_ident>)
+    };
+
+    Ok(ParsedValue {
+        defs,
+        impls,
+        doc: def_doc,
+        rename: json_name,
+        name: name_ident,
+        ty,
+    })
+}
+
+/// Parses a schema value of a tuple type.
+fn parse_tuple(
+    tuple_value: &Value,
+    name: &str,
+    name_prefix: &str,
+    vis: &Visibility,
+    required: bool,
+    internal_path: &TokenStream2,
+) -> Result<ParsedValue, String> {
+    let (rust_name, json_name) = renamed_field(name);
+    let name_ident = format_ident!("{}", rust_name);
+
+    let description = get_prop_str(tuple_value, "description")?;
+    let tuple_items = tuple_value
+        .get("prefixItems")
+        .ok_or("tuple must be defined using `prefixItems` property".to_owned())?
+        .as_array()
+        .ok_or("tuple `prefixItems` must be specified as an array".to_owned())?;
+
+    let mut tuple_types = Vec::new();
+    let mut tuple_defs = Vec::new();
+    let mut tuple_impls = Vec::new();
+
+    for (index, tuple_item) in tuple_items.iter().enumerate() {
+        let tuple_item_name = format!("{}{}", name, index);
+        let item = parse_value(
+            tuple_item,
+            &tuple_item_name,
+            name_prefix,
+            vis,
+            true,
+            internal_path,
+        )?;
+        tuple_types.push(item.ty);
+        tuple_defs.extend(item.defs);
+        tuple_impls.extend(item.impls);
+    }
+
+    let ty = if required {
+        quote!((#(#tuple_types),*))
+    } else {
+        quote!(Option<(#(#tuple_types),*)>)
+    };
+
+    Ok(ParsedValue {
+        defs: tuple_defs,
+        impls: tuple_impls,
+        doc: description.unwrap_or_default(),
+        rename: json_name,
+        name: name_ident,
+        ty,
+    })
+}
+
 /// Parses a schema value.
 fn parse_value(
     value: &Value,
@@ -525,22 +715,50 @@ fn parse_value(
     required: bool,
     internal_path: &TokenStream2,
 ) -> Result<ParsedValue, String> {
-    let value_type = value
-        .get("type")
-        .ok_or("value type not specified".to_owned())?
-        .as_str()
-        .ok_or("value type must be a string".to_owned())?;
+    let value_type = parse_value_type(value)?;
 
     match value_type {
-        "null" => parse_null(value, name, required),
-        "boolean" => parse_boolean(value, name, required),
-        "integer" => parse_integer(value, name, required),
-        "number" => parse_number(value, name, required),
-        "string" => parse_string(value, name, required),
-        "array" => parse_array(value, name, name_prefix, vis, required, internal_path),
-        "object" => parse_object(value, name, name_prefix, vis, required, internal_path),
-        unknown_type => Err(format!("unknown JSON value type '{}'", unknown_type)),
+        ValueType::Null => parse_null(value, name, required),
+        ValueType::Boolean => parse_boolean(value, name, required),
+        ValueType::Integer => parse_integer(value, name, required),
+        ValueType::Number => parse_number(value, name, required),
+        ValueType::String => parse_string(value, name, required),
+        ValueType::Array => parse_array(value, name, name_prefix, vis, required, internal_path),
+        ValueType::Object => parse_object(value, name, name_prefix, vis, required, internal_path),
+        ValueType::Enum => parse_enum(value, name, name_prefix, vis, required, internal_path),
+        ValueType::Tuple => parse_tuple(value, name, name_prefix, vis, required, internal_path),
+        ValueType::Unknown(unknown_type) => {
+            Err(format!("unknown JSON value type '{}'", unknown_type))
+        }
     }
+}
+
+/// Helper macro to throw a compiler error on a `Result::Err`.
+macro_rules! throw_on_err {
+    ( $res:expr, $tokens:expr ) => {
+        match $res {
+            Ok(value) => value,
+            Err(err) => {
+                return ::syn::Error::new_spanned(::proc_macro2::TokenStream::from($tokens), err)
+                    .to_compile_error()
+                    .into();
+            }
+        }
+    };
+}
+
+/// Helper macro to throw a compiler error on an `Option::None`.
+macro_rules! throw_on_none {
+    ( $opt:expr, $err:expr, $tokens:expr ) => {
+        match $opt {
+            Some(value) => value,
+            None => {
+                return ::syn::Error::new_spanned(::proc_macro2::TokenStream::from($tokens), $err)
+                    .to_compile_error()
+                    .into();
+            }
+        }
+    };
 }
 
 /// Parses a JSON schema definition into a Rust struct definition.
@@ -554,22 +772,17 @@ pub fn parse_from_schema(input: TokenStream) -> TokenStream {
         schema,
     } = schema_data;
 
-    let schema_title = get_prop_str(&schema, "title").map(|title| renamed_struct(&title));
-    let schema_description = get_prop_str(&schema, "description")
+    let schema_title =
+        throw_on_err!(get_prop_str(&schema, "title"), input).map(|title| renamed_struct(&title));
+    let schema_description = throw_on_err!(get_prop_str(&schema, "description"), input)
         .map(|s| format!("{}\n\n", s))
         .unwrap_or_default();
     let schema_title_ident = schema_title.map(|title| format_ident!("{}", title));
-    let struct_ident = match ident.or(schema_title_ident) {
-        Some(struct_ident) => struct_ident,
-        None => {
-            return syn::Error::new_spanned(
-                TokenStream2::from(input),
-                "no struct identifier specified in schema or macro invocation",
-            )
-            .to_compile_error()
-            .into();
-        }
-    };
+    let struct_ident = throw_on_none!(
+        ident.or(schema_title_ident),
+        "no struct identifier specified in schema or macro invocation",
+        input
+    );
 
     let internal_path = match crate_name("schema-struct") {
         Ok(FoundCrate::Name(name)) => {
@@ -583,21 +796,17 @@ pub fn parse_from_schema(input: TokenStream) -> TokenStream {
         defs: schema_defs,
         impls: schema_impls,
         ..
-    } = match parse_value(
-        &schema,
-        &struct_ident.to_string(),
-        "",
-        &vis.unwrap_or(Visibility::Inherited),
-        true,
-        &internal_path,
-    ) {
-        Ok(value) => value,
-        Err(e) => {
-            return syn::Error::new_spanned(TokenStream2::from(input), e)
-                .to_compile_error()
-                .into();
-        }
-    };
+    } = throw_on_err!(
+        parse_value(
+            &schema,
+            &struct_ident.to_string(),
+            "",
+            &vis.unwrap_or(Visibility::Inherited),
+            true,
+            &internal_path,
+        ),
+        input
+    );
 
     let schema_doc = if def {
         format!(

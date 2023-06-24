@@ -328,13 +328,107 @@ fn test_object() {
 /// Test constructing a struct with enum fields.
 #[test]
 fn test_enum() {
-    // TODO
+    schema_struct!(
+        schema = {
+            "$schema": "http://json-schema.org/draft-04/schema#",
+            "title": "SchemaWithEnum",
+            "description": "A schema with an enum field",
+            "type": "object",
+            "properties": {
+                "enum_field": {
+                    "enum": ["first", "second", "third"]
+                }
+            },
+            "required": ["enum_field"]
+        }
+    );
+
+    let json_with_enum_first = "{\"enum_field\":\"first\"}";
+    let value_with_enum_first = SchemaWithEnum::from_str(json_with_enum_first).unwrap();
+    assert_eq!(
+        &value_with_enum_first.to_str().unwrap(),
+        json_with_enum_first
+    );
+    assert!(matches!(
+        value_with_enum_first.enum_field,
+        SchemaWithEnumEnumField::First
+    ));
+
+    let json_with_enum_second = "{\"enum_field\":\"second\"}";
+    let value_with_enum_second = SchemaWithEnum::from_str(json_with_enum_second).unwrap();
+    assert_eq!(
+        &value_with_enum_second.to_str().unwrap(),
+        json_with_enum_second
+    );
+    assert!(matches!(
+        value_with_enum_second.enum_field,
+        SchemaWithEnumEnumField::Second
+    ));
+
+    let json_with_enum_third = "{\"enum_field\":\"third\"}";
+    let value_with_enum_third = SchemaWithEnum::from_str(json_with_enum_third).unwrap();
+    assert_eq!(
+        &value_with_enum_third.to_str().unwrap(),
+        json_with_enum_third
+    );
+    assert!(matches!(
+        value_with_enum_third.enum_field,
+        SchemaWithEnumEnumField::Third
+    ));
+
+    let json_with_enum_invalid_variant = "{\"enum_field\":\"fourth\"}";
+    assert!(SchemaWithEnum::from_str(json_with_enum_invalid_variant).is_err());
 }
 
 /// Test constructing a struct with tuple fields.
 #[test]
 fn test_tuple() {
-    // TODO
+    schema_struct!(
+        schema = {
+            "$schema": "http://json-schema.org/draft-04/schema#",
+            "title": "SchemaWithTuple",
+            "description": "A schema with a tuple field",
+            "type": "object",
+            "properties": {
+                "tuple_field": {
+                    "type": "array",
+                    "prefixItems": [
+                        {
+                            "type": "integer",
+                            "description": "The address number"
+                        },
+                        {
+                            "type": "string",
+                            "description": "The street name"
+                        },
+                        {
+                            "enum": ["Street", "Avenue", "Boulevard"],
+                            "description": "The street type"
+                        },
+                        {
+                            "enum": ["NW", "NE", "SW", "SE"],
+                            "description": "The city quadrant of the address"
+                        }
+                    ]
+                }
+            },
+            "required": ["tuple_field"]
+        }
+    );
+
+    let json_with_tuple = "{\"tuple_field\":[1600,\"Pennsylvania\",\"Avenue\",\"NW\"]}";
+    let value_with_tuple = SchemaWithTuple::from_str(json_with_tuple).unwrap();
+    assert_eq!(&value_with_tuple.to_str().unwrap(), json_with_tuple);
+    assert_eq!(value_with_tuple.tuple_field.0, 1600);
+    assert_eq!(value_with_tuple.tuple_field.1, "Pennsylvania".to_owned());
+    assert!(matches!(
+        value_with_tuple.tuple_field.2,
+        SchemaWithTupleTupleField2::Avenue
+    ));
+    assert!(matches!(
+        value_with_tuple.tuple_field.3,
+        SchemaWithTupleTupleField3::Nw
+    ));
 }
 
 /// Test constructing a struct containing arrays of objects.
