@@ -619,7 +619,96 @@ fn test_default() {
 /// Test refs.
 #[test]
 fn test_ref() {
-    // TODO
+    schema_struct!(
+        schema = {
+            "$schema": "http://json-schema.org/draft-04/schema#",
+            "title": "SchemaWithRef",
+            "description": "A schema with ref fields",
+            "$defs": {
+                "myInteger": {
+                    "description": "An alias for an integer value",
+                    "type": "integer"
+                },
+                "stringArray": {
+                    "description": "An array of strings",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "objectWithStringArray": {
+                    "description": "An object containing a string array",
+                    "type": "object",
+                    "properties": {
+                        "inner_array": {
+                            "$ref": "#/$defs/stringArray"
+                        }
+                    },
+                    "required": ["inner_array"]
+                },
+                "arrayWithItemsRef": {
+                    "description": "An array with item type ref",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/$defs/myInteger"
+                    }
+                }
+            },
+            "type": "object",
+            "properties": {
+                "my_integer_field": {
+                    "$ref": "#/$defs/myInteger"
+                },
+                "string_array_field": {
+                    "$ref": "#/$defs/stringArray"
+                },
+                "object_with_string_array_field": {
+                    "$ref": "#/definitions/objectWithStringArray"
+                },
+                "array_with_items_ref_field": {
+                    "$ref": "#/$defs/arrayWithItemsRef"
+                },
+                "self_referential_field": {
+                    "$ref": "#"
+                }
+            },
+            "required": ["string_array_field"]
+        }
+    );
+
+    let json_with_ref = "{\"array_with_items_ref_field\":[1,3,7,9],\"my_integer_field\":123,\"object_with_string_array_field\":{\"inner_array\":[\"four\"]},\"self_referential_field\":{\"array_with_items_ref_field\":null,\"my_integer_field\":null,\"object_with_string_array_field\":null,\"self_referential_field\":null,\"string_array_field\":[]},\"string_array_field\":[\"one\",\"two\",\"three\"]}";
+    let value_with_ref = SchemaWithRef::from_str(json_with_ref).unwrap();
+    assert_eq!(&value_with_ref.to_str().unwrap(), json_with_ref);
+    assert_eq!(value_with_ref.my_integer_field, Some(Box::new(123)));
+    assert_eq!(
+        value_with_ref.string_array_field,
+        Box::new(vec!["one".to_owned(), "two".to_owned(), "three".to_owned()])
+    );
+    assert_eq!(
+        value_with_ref.object_with_string_array_field,
+        Some(Box::new(SchemaWithRefDefObjectWithStringArray {
+            inner_array: Box::new(vec!["four".to_owned()])
+        }))
+    );
+    assert_eq!(
+        value_with_ref.array_with_items_ref_field,
+        Some(Box::new(vec![
+            Box::new(1),
+            Box::new(3),
+            Box::new(7),
+            Box::new(9)
+        ]))
+    );
+    assert_eq!(
+        value_with_ref.self_referential_field,
+        Some(Box::new(SchemaWithRef {
+            my_integer_field: None,
+            string_array_field: Box::<SchemaWithRefDefStringArray>::default(),
+            object_with_string_array_field: None,
+            array_with_items_ref_field: None,
+            self_referential_field: None
+        }))
+    );
 }
 
 /// Test struct visibility configuration.
