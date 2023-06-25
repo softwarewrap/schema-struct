@@ -122,6 +122,17 @@ fn get_prop_str<'a>(value: &'a Value, prop: &str) -> Result<Option<&'a str>, Str
     }
 }
 
+/// Retrieves an array property from a JSON value.
+fn get_prop_array<'a>(value: &'a Value, prop: &str) -> Result<Option<&'a Vec<Value>>, String> {
+    match value.get(prop) {
+        Some(prop_value) => prop_value
+            .as_array()
+            .map(Some)
+            .ok_or(format!("expected property `{}` to be an array", prop)),
+        None => Ok(None),
+    }
+}
+
 /// Retrieves an object property from a JSON value.
 fn get_prop_obj<'a>(
     value: &'a Value,
@@ -536,22 +547,19 @@ fn parse_object(
     let name_ident = format_ident!("{}", rust_name);
     let struct_name_ident = format_ident!("{}{}", name_prefix, struct_name);
     let empty_map = Map::new();
+    let empty_vec = Vec::new();
 
     let description = get_prop_str(object_value, "description")?;
-    let properties = object_value
-        .get("properties")
-        .and_then(|props| props.as_object())
-        .unwrap_or(&empty_map);
-    let required_props = object_value
-        .get("required")
-        .and_then(|required| required.as_array())
-        .map(|required_array| {
-            required_array
-                .iter()
-                .filter_map(|array_value| array_value.as_str())
-                .collect::<HashSet<_>>()
-        })
-        .unwrap_or_default();
+    let properties = get_prop_obj(object_value, "properties")?.unwrap_or(&empty_map);
+    let required_props_array = get_prop_array(object_value, "required")?.unwrap_or(&empty_vec);
+    let mut required_props = HashSet::new();
+
+    for required_prop in required_props_array {
+        let prop_name = required_prop
+            .as_str()
+            .ok_or("required property names must be strings".to_owned())?;
+        required_props.insert(prop_name);
+    }
 
     let mut parsed_prop_defs = Vec::new();
     let mut parsed_prop_impls = Vec::new();
