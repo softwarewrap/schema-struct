@@ -57,12 +57,18 @@ fn test_from_file() {
 /// Test constructing a struct from a schema at a URL.
 #[test]
 fn test_from_url() {
-    // TODO
+    schema_struct!(
+        ident = ProductFromUrl,
+        url = "https://raw.githubusercontent.com/WKHAllen/schema-struct/main/schema-struct/tests/schemas/product.json"
+    );
 
-    // schema_struct!(
-    //     ident = Draft4,
-    //     url = "http://json-schema.org/draft-04/schema#"
-    // );
+    let product_json = "{\"id\":5,\"name\":\"product name\",\"price\":12.34}";
+    let product = ProductFromUrl::from_str(product_json).unwrap();
+    assert_eq!(&product.to_str().unwrap(), product_json);
+
+    assert_eq!(product.id, 5);
+    assert_eq!(product.name, "product name".to_owned());
+    assert_eq!(product.price, 12.34);
 }
 
 /// Test constructing a struct with optional fields.
@@ -620,6 +626,7 @@ fn test_default() {
 #[test]
 fn test_ref() {
     schema_struct!(
+        vis = pub,
         schema = {
             "$schema": "http://json-schema.org/draft-04/schema#",
             "title": "SchemaWithRef",

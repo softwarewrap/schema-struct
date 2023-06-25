@@ -911,7 +911,11 @@ fn parse_subschemas(
                 let subschema_value_ident = format_ident!("{}", subschema_value_name);
 
                 let ParsedValue {
-                    defs, impls, ty, ..
+                    defs,
+                    impls,
+                    doc,
+                    ty,
+                    ..
                 } = parse_value(
                     subschema_value,
                     &subschema_value_name,
@@ -924,6 +928,7 @@ fn parse_subschemas(
 
                 if defs.is_empty() {
                     new_defs.push(quote! {
+                        #[doc = #doc]
                         #vis type #subschema_value_ident = #ty;
                     });
                 }
