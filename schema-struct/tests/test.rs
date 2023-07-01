@@ -68,7 +68,7 @@ fn test_from_file() {
 fn test_from_url() {
     schema_struct!(
         ident = ProductFromUrl,
-        url = "https://raw.githubusercontent.com/WKHAllen/schema-struct/main/schema-struct/tests/schemas/product.json"
+        url = "https://raw.githubusercontent.com/WKHAllen/schema-struct/main/schema-struct/tests/schemas/product-url.json"
     );
 
     let product_json = "{\"id\":5,\"name\":\"product name\",\"price\":12.34}";
