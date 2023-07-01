@@ -3,7 +3,6 @@
 mod parse;
 mod schema;
 mod schema_struct;
-mod util;
 
 use crate::parse::parse_from_schema;
 use proc_macro::TokenStream;

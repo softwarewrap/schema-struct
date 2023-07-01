@@ -1,5 +1,6 @@
 use convert_case::{Case, Casing};
 use proc_macro2::TokenStream;
+use quote::quote;
 use regex::Regex;
 use serde_json::{Map, Value};
 
@@ -213,4 +214,28 @@ pub fn ref_name(path: &[String], root_name: &str) -> String {
     let path_joined = path.join("_");
 
     renamed_struct(&path_joined)
+}
+
+/// Wraps the given type in an `Option` if marked as optional.
+pub fn maybe_optional(ty: TokenStream, required: bool) -> TokenStream {
+    if required {
+        ty
+    } else {
+        quote!(Option<#ty>)
+    }
+}
+
+/// Creates a documentation attribute if the given doc string is not empty.
+pub fn doc_attribute(maybe_doc: Option<&str>) -> TokenStream {
+    match maybe_doc {
+        Some(doc_str) => {
+            if !doc_str.is_empty() {
+                let doc = format!(" {}", doc_str.trim());
+                quote!(#[doc = #doc])
+            } else {
+                quote!()
+            }
+        }
+        None => quote!(),
+    }
 }
