@@ -215,12 +215,7 @@ impl ToTokens for SchemaStructDef {
             })
             .or(self.description.clone());
 
-        let doc_attr = if let Some(doc) = doc {
-            let doc = format!(" {}", doc);
-            quote!(#[doc = #doc])
-        } else {
-            quote!()
-        };
+        let doc_attr = doc_attribute(doc.as_deref());
 
         let (main_impl, rest) = self.defs.split_last().unwrap();
         let (main_def, pre_defs) = rest.split_last().unwrap();

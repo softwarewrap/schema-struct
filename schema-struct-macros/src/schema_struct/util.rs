@@ -239,3 +239,11 @@ pub fn doc_attribute(maybe_doc: Option<&str>) -> TokenStream {
         None => quote!(),
     }
 }
+
+/// Creates a serde rename attribute if the given rename value is not empty.
+pub fn rename_attribute(maybe_rename: Option<&str>) -> TokenStream {
+    match maybe_rename {
+        Some(rename_str) => quote!(#[serde(rename = #rename_str)]),
+        None => quote!(),
+    }
+}

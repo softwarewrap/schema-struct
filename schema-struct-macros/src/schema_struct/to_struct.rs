@@ -89,12 +89,7 @@ impl ToStruct for ObjectField {
                 defs_doc.extend(inner_defs_doc);
 
                 let doc_attr = doc_attribute(inner_field_doc.as_deref());
-
-                let renamed_attr = if let Some(renamed) = inner_field_rename {
-                    quote!(#[serde(rename = #renamed)])
-                } else {
-                    quote!()
-                };
+                let renamed_attr = rename_attribute(inner_field_rename.as_deref());
 
                 let inner_field_ident = format_ident!("{}", inner_field_name);
 
@@ -171,11 +166,7 @@ impl ToStruct for EnumField {
                 let (variant_name, variant_rename) = renamed_enum_variant(variant);
                 let variant_ident = format_ident!("{}", variant_name);
 
-                let renamed_attr = if let Some(renamed) = variant_rename {
-                    quote!(#[serde(rename = #renamed)])
-                } else {
-                    quote!()
-                };
+                let renamed_attr = rename_attribute(variant_rename.as_deref());
 
                 variant_tokens.push(quote! {
                     #renamed_attr
