@@ -278,20 +278,23 @@ impl SchemaStruct {
             .or(title)
             .ok_or("no struct identifier specified in schema or macro invocation")?;
 
-        let mut subschemas = HashMap::new();
-
-        if let Some(subschema_defs) = subschema_defs {
-            for (subschema_name, subschema_value) in subschema_defs {
-                let mut subschema_info = FieldInfo {
-                    name: subschema_name.clone(),
-                    description: None,
-                    required: true,
-                    subschema: true,
-                };
-                let subschema = Subschema::from_schema(subschema_value, &mut subschema_info)?;
-                subschemas.insert(subschema_name.clone(), subschema);
-            }
-        }
+        let subschemas = subschema_defs
+            .map(|subschema_defs| {
+                subschema_defs
+                    .iter()
+                    .map(|(subschema_name, subschema_value)| {
+                        let mut subschema_info = FieldInfo {
+                            name: subschema_name.clone(),
+                            description: None,
+                            required: true,
+                            subschema: true,
+                        };
+                        Subschema::from_schema(subschema_value, &mut subschema_info)
+                            .map(|subschema| (subschema_name.clone(), subschema))
+                    })
+                    .collect::<Result<HashMap<_, _>, _>>()
+            })
+            .unwrap_or(Ok(HashMap::new()))?;
 
         let mut field_info = FieldInfo {
             name: name.clone(),
@@ -334,20 +337,21 @@ impl SchemaStruct {
             internal_path,
         };
 
-        let mut defs = Vec::new();
-        let mut defs_doc = Vec::new();
-
-        for (subschema_name, subschema) in &self.subschemas {
-            let subschema_info = FieldInfo {
-                name: subschema_name.clone(),
-                description: None,
-                required: true,
-                subschema: true,
-            };
-            let subschema_def = subschema.to_struct(&subschema_info, &ctx);
-            defs.extend(subschema_def.defs);
-            defs_doc.extend(subschema_def.defs_doc);
-        }
+        let (mut defs, mut defs_doc) = self.subschemas.iter().fold(
+            (Vec::new(), Vec::new()),
+            |(mut defs, mut defs_doc), (subschema_name, subschema)| {
+                let subschema_info = FieldInfo {
+                    name: subschema_name.clone(),
+                    description: None,
+                    required: true,
+                    subschema: true,
+                };
+                let subschema_def = subschema.to_struct(&subschema_info, &ctx);
+                defs.extend(subschema_def.defs);
+                defs_doc.extend(subschema_def.defs_doc);
+                (defs, defs_doc)
+            },
+        );
 
         let root_def = self.root.to_struct(&info, &ctx);
         defs.extend(root_def.defs);

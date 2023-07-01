@@ -73,45 +73,45 @@ impl ToStruct for ObjectField {
             ..ctx.clone()
         };
 
-        let mut defs = Vec::new();
-        let mut defs_doc = Vec::new();
-        let mut field_tokens = Vec::new();
-        let mut field_tokens_doc = Vec::new();
+        let (mut defs, mut defs_doc, field_tokens, field_tokens_doc) = self.fields.values().fold(
+            (Vec::new(), Vec::new(), Vec::new(), Vec::new()),
+            |(mut defs, mut defs_doc, mut field_tokens, mut field_tokens_doc), inner_field| {
+                let FieldDef {
+                    field_name: inner_field_name,
+                    field_rename: inner_field_rename,
+                    field_doc: inner_field_doc,
+                    field_ty: inner_field_ty,
+                    defs: inner_defs,
+                    defs_doc: inner_defs_doc,
+                } = inner_field.to_struct(info, &inner_ctx);
 
-        for inner_field in self.fields.values() {
-            let FieldDef {
-                field_name: inner_field_name,
-                field_rename: inner_field_rename,
-                field_doc: inner_field_doc,
-                field_ty: inner_field_ty,
-                defs: inner_defs,
-                defs_doc: inner_defs_doc,
-            } = inner_field.to_struct(info, &inner_ctx);
+                defs.extend(inner_defs);
+                defs_doc.extend(inner_defs_doc);
 
-            defs.extend(inner_defs);
-            defs_doc.extend(inner_defs_doc);
+                let doc_attr = doc_attribute(inner_field_doc.as_deref());
 
-            let doc_attr = doc_attribute(inner_field_doc.as_deref());
+                let renamed_attr = if let Some(renamed) = inner_field_rename {
+                    quote!(#[serde(rename = #renamed)])
+                } else {
+                    quote!()
+                };
 
-            let renamed_attr = if let Some(renamed) = inner_field_rename {
-                quote!(#[serde(rename = #renamed)])
-            } else {
-                quote!()
-            };
+                let inner_field_ident = format_ident!("{}", inner_field_name);
 
-            let inner_field_ident = format_ident!("{}", inner_field_name);
+                field_tokens.push(quote! {
+                    #doc_attr
+                    #renamed_attr
+                    pub #inner_field_ident: #inner_field_ty,
+                });
 
-            field_tokens.push(quote! {
-                #doc_attr
-                #renamed_attr
-                pub #inner_field_ident: #inner_field_ty,
-            });
+                field_tokens_doc.push(quote! {
+                    #doc_attr
+                    pub #inner_field_ident: #inner_field_ty,
+                });
 
-            field_tokens_doc.push(quote! {
-                #doc_attr
-                pub #inner_field_ident: #inner_field_ty,
-            });
-        }
+                (defs, defs_doc, field_tokens, field_tokens_doc)
+            },
+        );
 
         let doc_attr = doc_attribute(info.description.as_deref());
 
@@ -165,32 +165,35 @@ impl ToStruct for EnumField {
         let internal_path = &ctx.internal_path;
         let field_ty = maybe_optional(quote!(#enum_ident), info.required);
 
-        let mut defs = Vec::new();
-        let mut defs_doc = Vec::new();
-        let mut variant_tokens = Vec::new();
-        let mut variant_tokens_doc = Vec::new();
+        let (variant_tokens, variant_tokens_doc) = self.variants.iter().fold(
+            (Vec::new(), Vec::new()),
+            |(mut variant_tokens, mut variant_tokens_doc), variant| {
+                let (variant_name, variant_rename) = renamed_enum_variant(variant);
+                let variant_ident = format_ident!("{}", variant_name);
 
-        for variant in &self.variants {
-            let (variant_name, variant_rename) = renamed_enum_variant(variant);
-            let variant_ident = format_ident!("{}", variant_name);
+                let renamed_attr = if let Some(renamed) = variant_rename {
+                    quote!(#[serde(rename = #renamed)])
+                } else {
+                    quote!()
+                };
 
-            let renamed_attr = if let Some(renamed) = variant_rename {
-                quote!(#[serde(rename = #renamed)])
-            } else {
-                quote!()
-            };
+                variant_tokens.push(quote! {
+                    #renamed_attr
+                    #variant_ident,
+                });
 
-            variant_tokens.push(quote! {
-                #renamed_attr
-                #variant_ident,
-            });
+                variant_tokens_doc.push(quote! {
+                    #variant_ident,
+                });
 
-            variant_tokens_doc.push(quote! {
-                #variant_ident,
-            });
-        }
+                (variant_tokens, variant_tokens_doc)
+            },
+        );
 
         let doc_attr = doc_attribute(info.description.as_deref());
+
+        let mut defs = Vec::new();
+        let mut defs_doc = Vec::new();
 
         defs.push(quote! {
             #doc_attr
@@ -241,25 +244,26 @@ impl ToStruct for TupleField {
             ..info.clone()
         };
 
-        let mut defs = Vec::new();
-        let mut defs_doc = Vec::new();
-        let mut item_tokens = Vec::new();
+        let (defs, defs_doc, item_tokens) = self.items.iter().fold(
+            (Vec::new(), Vec::new(), Vec::new()),
+            |(mut defs, mut defs_doc, mut item_tokens), inner_item| {
+                let FieldDef {
+                    field_name: _inner_item_name,
+                    field_rename: _inner_item_rename,
+                    field_doc: _inner_item_doc,
+                    field_ty: inner_item_ty,
+                    defs: inner_defs,
+                    defs_doc: inner_defs_doc,
+                } = inner_item.to_struct(&inner_info, ctx);
 
-        for inner_item in &self.items {
-            let FieldDef {
-                field_name: _inner_item_name,
-                field_rename: _inner_item_rename,
-                field_doc: _inner_item_doc,
-                field_ty: inner_item_ty,
-                defs: inner_defs,
-                defs_doc: inner_defs_doc,
-            } = inner_item.to_struct(&inner_info, ctx);
+                defs.extend(inner_defs);
+                defs_doc.extend(inner_defs_doc);
 
-            defs.extend(inner_defs);
-            defs_doc.extend(inner_defs_doc);
+                item_tokens.push(quote!(#inner_item_ty));
 
-            item_tokens.push(quote!(#inner_item_ty));
-        }
+                (defs, defs_doc, item_tokens)
+            },
+        );
 
         let field_ty = maybe_optional(quote!((#(#item_tokens),*)), info.required);
 

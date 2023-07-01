@@ -51,27 +51,29 @@ impl FromSchema for ObjectField {
 
         let properties = get_prop_obj(value, "properties")?.unwrap_or(&empty_map);
         let required_props_array = get_prop_array(value, "required")?.unwrap_or(&empty_vec);
-        let mut required_props = HashSet::new();
 
-        for required_prop in required_props_array {
-            let prop_name = required_prop
-                .as_str()
-                .ok_or("required property names must be strings")?;
-            required_props.insert(prop_name);
-        }
+        let required_props = required_props_array
+            .iter()
+            .map(|required_prop| {
+                required_prop
+                    .as_str()
+                    .ok_or("required property names must be strings")
+            })
+            .collect::<Result<HashSet<_>, _>>()?;
 
-        let mut fields = HashMap::new();
-
-        for (property_name, property_value) in properties {
-            let mut property_info = FieldInfo {
-                name: property_name.clone(),
-                description: None,
-                required: required_props.contains(property_name.as_str()),
-                subschema: false,
-            };
-            let parsed_value = Field::from_schema(property_value, &mut property_info)?;
-            fields.insert(property_name.to_owned(), parsed_value);
-        }
+        let fields = properties
+            .iter()
+            .map(|(property_name, property_value)| {
+                let mut property_info = FieldInfo {
+                    name: property_name.clone(),
+                    description: None,
+                    required: required_props.contains(property_name.as_str()),
+                    subschema: false,
+                };
+                Field::from_schema(property_value, &mut property_info)
+                    .map(|parsed_value| (property_name.clone(), parsed_value))
+            })
+            .collect::<Result<HashMap<_, _>, _>>()?;
 
         Ok(Self { fields })
     }
@@ -81,12 +83,15 @@ impl FromSchema for EnumField {
     fn from_schema(value: &Value, _info: &mut FieldInfo) -> Result<Self, FromSchemaError> {
         let variant_values = get_prop_array(value, "enum")?.ok_or("no enum variants specified")?;
 
-        let mut variants = Vec::new();
-
-        for variant in variant_values {
-            let variant_name = variant.as_str().ok_or("enum variants must be strings")?;
-            variants.push(variant_name.to_owned());
-        }
+        let variants = variant_values
+            .iter()
+            .map(|variant| {
+                variant
+                    .as_str()
+                    .map(|s| s.to_owned())
+                    .ok_or("enum variants must be strings")
+            })
+            .collect::<Result<Vec<_>, _>>()?;
 
         Ok(Self { variants })
     }
@@ -99,18 +104,19 @@ impl FromSchema for TupleField {
         let tuple_items = get_prop_array(value, "prefixItems")?
             .ok_or("tuple must be defined using the `prefixItems` property")?;
 
-        let mut items = Vec::new();
-
-        for (index, tuple_item) in tuple_items.iter().enumerate() {
-            let mut item_info = FieldInfo {
-                name: format!("{}{}", info.name, index),
-                description: None,
-                required: true,
-                subschema: false,
-            };
-            let parsed_value = Field::from_schema(tuple_item, &mut item_info)?;
-            items.push(parsed_value);
-        }
+        let items = tuple_items
+            .iter()
+            .enumerate()
+            .map(|(index, tuple_item)| {
+                let mut item_info = FieldInfo {
+                    name: format!("{}{}", info.name, index),
+                    description: None,
+                    required: true,
+                    subschema: false,
+                };
+                Field::from_schema(tuple_item, &mut item_info)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
 
         Ok(Self { items })
     }
