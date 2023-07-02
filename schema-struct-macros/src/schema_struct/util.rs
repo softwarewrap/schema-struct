@@ -6,6 +6,7 @@ use regex::Regex;
 use serde_json::{Map, Value};
 
 /// Retrieves a null property from a JSON value.
+#[allow(dead_code)]
 pub fn get_prop_null(value: &Value, prop: &str) -> Result<Option<()>, String> {
     match value.get(prop) {
         Some(prop_value) => prop_value
@@ -17,6 +18,7 @@ pub fn get_prop_null(value: &Value, prop: &str) -> Result<Option<()>, String> {
 }
 
 /// Retrieves a boolean property from a JSON value.
+#[allow(dead_code)]
 pub fn get_prop_bool(value: &Value, prop: &str) -> Result<Option<bool>, String> {
     match value.get(prop) {
         Some(prop_value) => prop_value
@@ -28,6 +30,7 @@ pub fn get_prop_bool(value: &Value, prop: &str) -> Result<Option<bool>, String> 
 }
 
 /// Retrieves an integer property from a JSON value.
+#[allow(dead_code)]
 pub fn get_prop_int(value: &Value, prop: &str) -> Result<Option<i64>, String> {
     match value.get(prop) {
         Some(prop_value) => prop_value
@@ -39,6 +42,7 @@ pub fn get_prop_int(value: &Value, prop: &str) -> Result<Option<i64>, String> {
 }
 
 /// Retrieves a number property from a JSON value.
+#[allow(dead_code)]
 pub fn get_prop_number(value: &Value, prop: &str) -> Result<Option<f64>, String> {
     match value.get(prop) {
         Some(prop_value) => prop_value
