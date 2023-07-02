@@ -9,6 +9,41 @@ use std::collections::HashMap;
 use std::fmt::Display;
 use syn::Visibility;
 
+/// A JSON value type.
+#[derive(Debug, Clone, Copy)]
+pub enum ValueType {
+    Null,
+    Boolean,
+    Integer,
+    Number,
+    String,
+    Array,
+    Object,
+    Enum,
+    Tuple,
+    Ref,
+}
+
+impl ValueType {
+    pub fn from_str(s: &str) -> Result<Self, String> {
+        Ok(match s {
+            "null" => Self::Null,
+            "boolean" => Self::Boolean,
+            "integer" => Self::Integer,
+            "number" => Self::Number,
+            "string" => Self::String,
+            "array" => Self::Array,
+            "object" => Self::Object,
+            "enum" => Self::Enum,
+            "tuple" => Self::Tuple,
+            "ref" => Self::Ref,
+            unknown_ty => {
+                return Err(format!("unknown JSON type `{}`", unknown_ty));
+            }
+        })
+    }
+}
+
 /// Information that applies to all fields.
 #[derive(Debug, Clone)]
 pub struct FieldInfo {
@@ -23,30 +58,47 @@ pub struct FieldInfo {
 }
 
 /// A null field.
-#[derive(Debug, Clone, Copy)]
-pub struct NullField;
+#[derive(Debug, Clone)]
+pub struct NullField {
+    /// The default value.
+    pub default: Option<Value>,
+}
 
 /// A boolean field.
-#[derive(Debug, Clone, Copy)]
-pub struct BooleanField;
+#[derive(Debug, Clone)]
+pub struct BooleanField {
+    /// The default value.
+    pub default: Option<Value>,
+}
 
 /// An integer field.
-#[derive(Debug, Clone, Copy)]
-pub struct IntegerField;
+#[derive(Debug, Clone)]
+pub struct IntegerField {
+    /// The default value.
+    pub default: Option<Value>,
+}
 
 /// A number field.
-#[derive(Debug, Clone, Copy)]
-pub struct NumberField;
+#[derive(Debug, Clone)]
+pub struct NumberField {
+    /// The default value.
+    pub default: Option<Value>,
+}
 
 /// A string field.
-#[derive(Debug, Clone, Copy)]
-pub struct StringField;
+#[derive(Debug, Clone)]
+pub struct StringField {
+    /// The default value.
+    pub default: Option<Value>,
+}
 
 /// An array field.
 #[derive(Debug, Clone)]
 pub struct ArrayField {
     /// The items in the array.
     pub items: Field,
+    /// The default value.
+    pub default: Option<Value>,
 }
 
 /// An object field.
@@ -54,6 +106,8 @@ pub struct ArrayField {
 pub struct ObjectField {
     /// A mapping of the object's field names to values.
     pub fields: HashMap<String, Field>,
+    /// The default value.
+    pub default: Option<Value>,
 }
 
 /// An enum field.
@@ -61,6 +115,8 @@ pub struct ObjectField {
 pub struct EnumField {
     /// The names of the enum's variants.
     pub variants: Vec<String>,
+    /// The default value.
+    pub default: Option<Value>,
 }
 
 /// A tuple field.
@@ -68,6 +124,8 @@ pub struct EnumField {
 pub struct TupleField {
     /// The inner tuple fields.
     pub items: Vec<Field>,
+    /// The default value.
+    pub default: Option<Value>,
 }
 
 /// A reference field.
@@ -75,6 +133,8 @@ pub struct TupleField {
 pub struct RefField {
     /// The reference path segments.
     pub path: Vec<String>,
+    /// The default value.
+    pub default: Option<Value>,
 }
 
 /// The type of a field.
@@ -121,6 +181,8 @@ impl Display for FromSchemaError {
     }
 }
 
+impl std::error::Error for FromSchemaError {}
+
 impl From<&str> for FromSchemaError {
     fn from(value: &str) -> Self {
         Self {
@@ -155,7 +217,9 @@ pub struct FieldDef {
 
 /// Information relating to the context of a field.
 #[derive(Clone)]
-pub struct FieldContext {
+pub struct FieldContext<'a> {
+    /// A reference to the entire schema/struct definition.
+    pub schema: &'a SchemaStruct,
     /// The name of the root field.
     pub root_name: String,
     /// The name prefix at the current level.
@@ -326,6 +390,7 @@ impl SchemaStruct {
             subschema: false,
         };
         let ctx = FieldContext {
+            schema: self,
             root_name: self.name.clone(),
             name_prefix: String::new(),
             vis: self.vis.clone(),

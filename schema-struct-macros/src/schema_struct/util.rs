@@ -1,41 +1,51 @@
+use super::types::ValueType;
 use convert_case::{Case, Casing};
 use proc_macro2::TokenStream;
 use quote::quote;
 use regex::Regex;
 use serde_json::{Map, Value};
 
-/// A JSON value type.
-#[derive(Debug, Clone, Copy)]
-pub enum ValueType {
-    Null,
-    Boolean,
-    Integer,
-    Number,
-    String,
-    Array,
-    Object,
-    Enum,
-    Tuple,
-    Ref,
+/// Retrieves a null property from a JSON value.
+pub fn get_prop_null(value: &Value, prop: &str) -> Result<Option<()>, String> {
+    match value.get(prop) {
+        Some(prop_value) => prop_value
+            .as_null()
+            .map(Some)
+            .ok_or(format!("expected property `{}` to be null", prop)),
+        None => Ok(None),
+    }
 }
 
-impl ValueType {
-    pub fn from_str(s: &str) -> Result<Self, String> {
-        Ok(match s {
-            "null" => Self::Null,
-            "boolean" => Self::Boolean,
-            "integer" => Self::Integer,
-            "number" => Self::Number,
-            "string" => Self::String,
-            "array" => Self::Array,
-            "object" => Self::Object,
-            "enum" => Self::Enum,
-            "tuple" => Self::Tuple,
-            "ref" => Self::Ref,
-            unknown_ty => {
-                return Err(format!("unknown JSON type `{}`", unknown_ty));
-            }
-        })
+/// Retrieves a boolean property from a JSON value.
+pub fn get_prop_bool(value: &Value, prop: &str) -> Result<Option<bool>, String> {
+    match value.get(prop) {
+        Some(prop_value) => prop_value
+            .as_bool()
+            .map(Some)
+            .ok_or(format!("expected property `{}` to be a boolean", prop)),
+        None => Ok(None),
+    }
+}
+
+/// Retrieves an integer property from a JSON value.
+pub fn get_prop_int(value: &Value, prop: &str) -> Result<Option<i64>, String> {
+    match value.get(prop) {
+        Some(prop_value) => prop_value
+            .as_i64()
+            .map(Some)
+            .ok_or(format!("expected property `{}` to be an integer", prop)),
+        None => Ok(None),
+    }
+}
+
+/// Retrieves a number property from a JSON value.
+pub fn get_prop_number(value: &Value, prop: &str) -> Result<Option<f64>, String> {
+    match value.get(prop) {
+        Some(prop_value) => prop_value
+            .as_f64()
+            .map(Some)
+            .ok_or(format!("expected property `{}` to be a number", prop)),
+        None => Ok(None),
     }
 }
 
@@ -245,5 +255,28 @@ pub fn rename_attribute(maybe_rename: Option<&str>) -> TokenStream {
     match maybe_rename {
         Some(rename_str) => quote!(#[serde(rename = #rename_str)]),
         None => quote!(),
+    }
+}
+
+/// Inverts wrapped generic types.
+pub trait Invert<T> {
+    fn invert(self) -> T;
+}
+
+impl<T, E> Invert<Result<Option<T>, E>> for Option<Result<T, E>> {
+    fn invert(self) -> Result<Option<T>, E> {
+        match self {
+            Some(res) => res.map(|x| Some(x)),
+            None => Ok(None),
+        }
+    }
+}
+
+impl<T, E> Invert<Option<Result<T, E>>> for Result<Option<T>, E> {
+    fn invert(self) -> Option<Result<T, E>> {
+        match self {
+            Ok(opt) => opt.map(|x| Ok(x)),
+            Err(e) => Some(Err(e)),
+        }
     }
 }

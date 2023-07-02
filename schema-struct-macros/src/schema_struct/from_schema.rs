@@ -16,7 +16,9 @@ macro_rules! impl_from_schema_primitive {
             fn from_schema(value: &Value, _info: &mut FieldInfo) -> Result<Self, FromSchemaError> {
                 assert_value_type(value, $json_ty)?;
 
-                Ok(Self)
+                let default = value.get("default").map(ToOwned::to_owned);
+
+                Ok(Self { default })
             }
         }
     };
@@ -37,8 +39,9 @@ impl FromSchema for ArrayField {
             .get("items")
             .ok_or("array must have property `items`")?;
         let items = Field::from_schema(items_value, info)?;
+        let default = value.get("default").map(ToOwned::to_owned);
 
-        Ok(Self { items })
+        Ok(Self { items, default })
     }
 }
 
@@ -75,7 +78,9 @@ impl FromSchema for ObjectField {
             })
             .collect::<Result<HashMap<_, _>, _>>()?;
 
-        Ok(Self { fields })
+        let default = value.get("default").map(ToOwned::to_owned);
+
+        Ok(Self { fields, default })
     }
 }
 
@@ -93,7 +98,9 @@ impl FromSchema for EnumField {
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        Ok(Self { variants })
+        let default = value.get("default").map(ToOwned::to_owned);
+
+        Ok(Self { variants, default })
     }
 }
 
@@ -118,7 +125,9 @@ impl FromSchema for TupleField {
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        Ok(Self { items })
+        let default = value.get("default").map(ToOwned::to_owned);
+
+        Ok(Self { items, default })
     }
 }
 
@@ -126,8 +135,9 @@ impl FromSchema for RefField {
     fn from_schema(value: &Value, _info: &mut FieldInfo) -> Result<Self, FromSchemaError> {
         let ref_path = get_prop_str(value, "$ref")?.ok_or("refs must specify `$ref` property")?;
         let path = ref_path.split('/').map(|s| s.to_owned()).collect();
+        let default = value.get("default").map(ToOwned::to_owned);
 
-        Ok(Self { path })
+        Ok(Self { path, default })
     }
 }
 
