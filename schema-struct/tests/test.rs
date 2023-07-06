@@ -721,10 +721,129 @@ fn test_nested_objects() {
     );
 }
 
-/// Test structs with default fields.
+/// Test structs with default primitive fields.
 #[test]
-fn test_default() {
+fn test_default_primitives() {
+    schema_struct!(
+        schema = {
+            "$schema": "http://json-schema.org/draft-04/schema#",
+            "title": "SchemaWithDefaults",
+            "description": "A product from Acme's catalog",
+            "type": "object",
+            "properties": {
+                "null_prop": {
+                    "type": "null",
+                    "default": null
+                },
+                "boolean_prop": {
+                    "type": "boolean",
+                    "default": true
+                },
+                "integer_prop": {
+                    "type": "integer",
+                    "default": 7
+                },
+                "number_prop": {
+                    "type": "number",
+                    "default": 3.45
+                },
+                "string_prop": {
+                    "type": "string",
+                    "default": "Hello, world!"
+                }
+            },
+            "required": ["null_prop", "boolean_prop", "integer_prop", "number_prop", "string_prop"]
+        }
+    );
+
+    let product_json = "{\"null_prop\":null,\"boolean_prop\":true,\"integer_prop\":7,\"number_prop\":3.45,\"string_prop\":\"Hello, world!\"}";
+    let product = SchemaWithDefaults::from_str("{}").unwrap();
+    assert_values_eq!(&product.to_str().unwrap(), product_json);
+
+    assert!(product.boolean_prop);
+    assert_eq!(product.integer_prop, 7);
+    assert_eq!(product.number_prop, 3.45);
+    assert_eq!(product.string_prop, "Hello, world!".to_owned());
+}
+
+/// Test structs with default array fields.
+#[test]
+fn test_default_array() {
     // TODO
+}
+
+/// Test structs with default object fields.
+#[test]
+fn test_default_object() {
+    // TODO
+}
+
+/// Test structs with default enum fields.
+#[test]
+fn test_default_enum() {
+    // TODO
+}
+
+/// Test structs with default tuple fields.
+#[test]
+fn test_default_tuple() {
+    // TODO
+}
+
+/// Test structs with default subschemas.
+#[test]
+fn test_default_subschema() {
+    // TODO
+}
+
+/// Test structs with optional default fields.
+#[test]
+fn test_default_optional() {
+    schema_struct!(
+        schema = {
+            "$schema": "http://json-schema.org/draft-04/schema#",
+            "title": "SchemaWithOptionalDefaults",
+            "description": "A product from Acme's catalog",
+            "type": "object",
+            "properties": {
+                "null_prop": {
+                    "type": "null",
+                    "default": null
+                },
+                "boolean_prop": {
+                    "type": "boolean",
+                    "default": true
+                },
+                "integer_prop": {
+                    "type": "integer",
+                    "default": 7
+                },
+                "number_prop": {
+                    "type": "number",
+                    "default": 3.45
+                },
+                "string_prop": {
+                    "type": "string",
+                    "default": "Hello, world!"
+                },
+                "optional_prop_without_default": {
+                    "type": "integer"
+                }
+            }
+        }
+    );
+
+    let product_json = "{\"null_prop\":null,\"boolean_prop\":true,\"integer_prop\":7,\"number_prop\":3.45,\"string_prop\":\"Hello, world!\",\"optional_prop_without_default\":null}";
+    let product = SchemaWithOptionalDefaults::from_str("{}").unwrap();
+    assert_values_eq!(&product.to_str().unwrap(), product_json);
+
+    assert_eq!(product.boolean_prop, Some(true));
+    assert_eq!(product.integer_prop, Some(7));
+    assert_eq!(product.number_prop, Some(3.45));
+    assert_eq!(product.string_prop, Some("Hello, world!".to_owned()));
+    assert_eq!(product.optional_prop_without_default, None);
+
+    // TODO: add optional arrays, objects, enums, tuples, and subschemas
 }
 
 /// Test struct visibility configuration.

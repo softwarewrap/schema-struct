@@ -111,7 +111,7 @@ pub fn parse_from_schema(input: TokenStream) -> TokenStream {
     let schema_config = parse_macro_input!(schema_input as SchemaStructConfig);
 
     let schema = throw_on_err!(SchemaStruct::from_schema(schema_config), input);
-    let def = schema.to_struct();
+    let def = throw_on_err!(schema.to_struct(), input);
 
     quote!(#def).into()
 }

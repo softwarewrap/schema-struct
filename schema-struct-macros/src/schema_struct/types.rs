@@ -25,7 +25,7 @@ pub enum ValueType {
 }
 
 impl ValueType {
-    pub fn from_str(s: &str) -> Result<Self, String> {
+    pub fn from_str(s: &str) -> Result<Self, SchemaStructError> {
         Ok(match s {
             "null" => Self::Null,
             "boolean" => Self::Boolean,
@@ -38,7 +38,7 @@ impl ValueType {
             "tuple" => Self::Tuple,
             "ref" => Self::Ref,
             unknown_ty => {
-                return Err(format!("unknown JSON type `{}`", unknown_ty));
+                return Err(format!("unknown JSON type `{}`", unknown_ty).into());
             }
         })
     }
@@ -170,20 +170,20 @@ pub struct Subschema {
 
 /// An error while parsing a schema.
 #[derive(Debug, Clone)]
-pub struct FromSchemaError {
+pub struct SchemaStructError {
     /// The error message.
     pub message: String,
 }
 
-impl Display for FromSchemaError {
+impl Display for SchemaStructError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&self.message)
     }
 }
 
-impl std::error::Error for FromSchemaError {}
+impl std::error::Error for SchemaStructError {}
 
-impl From<&str> for FromSchemaError {
+impl From<&str> for SchemaStructError {
     fn from(value: &str) -> Self {
         Self {
             message: value.to_owned(),
@@ -191,7 +191,7 @@ impl From<&str> for FromSchemaError {
     }
 }
 
-impl From<String> for FromSchemaError {
+impl From<String> for SchemaStructError {
     fn from(value: String) -> Self {
         Self { message: value }
     }
@@ -204,6 +204,9 @@ pub struct FieldDef {
     pub field_name: String,
     /// A different named to be used when serializing and deserializing.
     pub field_rename: Option<String>,
+    /// The name of a function to use to fill in a default value for the
+    /// field. The function itself should be defined in `defs`.
+    pub field_default: Option<String>,
     /// Documentation for the field.
     pub field_doc: Option<String>,
     /// The field's type.
@@ -318,7 +321,7 @@ pub struct SchemaStruct {
 
 impl SchemaStruct {
     /// Parses a JSON schema into a representation of a Rust data structure.
-    pub fn from_schema(config: SchemaStructConfig) -> Result<Self, FromSchemaError> {
+    pub fn from_schema(config: SchemaStructConfig) -> Result<Self, SchemaStructError> {
         let SchemaStructConfig {
             vis,
             ident,
@@ -374,7 +377,7 @@ impl SchemaStruct {
     }
 
     /// Generates Rust code from the data structure representation.
-    pub fn to_struct(&self) -> SchemaStructDef {
+    pub fn to_struct(&self) -> Result<SchemaStructDef, SchemaStructError> {
         let internal_path = match crate_name("schema-struct") {
             Ok(FoundCrate::Name(name)) => {
                 let ident = format_ident!("{}", name);
@@ -397,7 +400,7 @@ impl SchemaStruct {
             internal_path,
         };
 
-        let (mut defs, mut defs_doc) = self.subschemas.iter().fold(
+        let (mut defs, mut defs_doc) = self.subschemas.iter().try_fold(
             (Vec::new(), Vec::new()),
             |(mut defs, mut defs_doc), (subschema_name, subschema)| {
                 let subschema_info = FieldInfo {
@@ -406,22 +409,22 @@ impl SchemaStruct {
                     required: true,
                     subschema: true,
                 };
-                let subschema_def = subschema.to_struct(&subschema_info, &ctx);
+                let subschema_def = subschema.to_struct(&subschema_info, &ctx)?;
                 defs.extend(subschema_def.defs);
                 defs_doc.extend(subschema_def.defs_doc);
-                (defs, defs_doc)
+                Result::<_, SchemaStructError>::Ok((defs, defs_doc))
             },
-        );
+        )?;
 
-        let root_def = self.root.to_struct(&info, &ctx);
+        let root_def = self.root.to_struct(&info, &ctx)?;
         defs.extend(root_def.defs);
         defs_doc.extend(root_def.defs_doc);
 
-        SchemaStructDef {
+        Ok(SchemaStructDef {
             name: self.name.clone(),
             description: self.description.clone(),
             defs,
             defs_doc: self.def.then_some(defs_doc),
-        }
+        })
     }
 }

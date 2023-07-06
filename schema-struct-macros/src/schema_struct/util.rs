@@ -1,4 +1,4 @@
-use super::types::ValueType;
+use super::types::{SchemaStructError, ValueType};
 use convert_case::{Case, Casing};
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -104,7 +104,7 @@ pub fn assert_value_type(value: &Value, ty: &str) -> Result<(), String> {
 }
 
 /// Parses a JSON value's type.
-pub fn parse_value_type(value: &Value) -> Result<ValueType, String> {
+pub fn parse_value_type(value: &Value) -> Result<ValueType, SchemaStructError> {
     ValueType::from_str(match value.get("type") {
         Some(ty) => {
             match ty
@@ -205,6 +205,11 @@ pub fn renamed_ref(name: &str, root_name: &str) -> String {
     renamed_struct(&format!("{}_def_{}", root_name, name))
 }
 
+/// Renames a function to fit with common conventions.
+pub fn renamed_function(name: &str) -> String {
+    renamed_field(name).0
+}
+
 /// Gets the name of the identifier referenced in a ref field.
 pub fn ref_name(path: &[String], root_name: &str) -> String {
     let mut path = path.to_owned();
@@ -230,12 +235,26 @@ pub fn ref_name(path: &[String], root_name: &str) -> String {
     renamed_struct(&path_joined)
 }
 
+/// Generates a name for a function providing a default value.
+pub fn default_fn_name(name_prefix: &str, name: &str) -> String {
+    renamed_function(&format!("{}_{}_default", name_prefix, name))
+}
+
 /// Wraps the given type in an `Option` if marked as optional.
 pub fn maybe_optional(ty: TokenStream, required: bool) -> TokenStream {
     if required {
         ty
     } else {
         quote!(Option<#ty>)
+    }
+}
+
+/// Wraps the given value in `Option::Some` if marked as optional.
+pub fn maybe_optional_value(value: TokenStream, required: bool) -> TokenStream {
+    if required {
+        value
+    } else {
+        quote!(Some(#value))
     }
 }
 
@@ -258,6 +277,15 @@ pub fn doc_attribute(maybe_doc: Option<&str>) -> TokenStream {
 pub fn rename_attribute(maybe_rename: Option<&str>) -> TokenStream {
     match maybe_rename {
         Some(rename_str) => quote!(#[serde(rename = #rename_str)]),
+        None => quote!(),
+    }
+}
+
+/// Creates a serde default attribute if the given default function name is
+/// not empty.
+pub fn default_attribute(maybe_default: Option<&str>) -> TokenStream {
+    match maybe_default {
+        Some(default_str) => quote!(#[serde(default = #default_str)]),
         None => quote!(),
     }
 }

@@ -6,14 +6,17 @@ use std::collections::{HashMap, HashSet};
 /// Parses a JSON schema.
 pub trait FromSchema: Sized {
     /// Tries to parse a JSON schema into `Self`.
-    fn from_schema(value: &Value, info: &mut FieldInfo) -> Result<Self, FromSchemaError>;
+    fn from_schema(value: &Value, info: &mut FieldInfo) -> Result<Self, SchemaStructError>;
 }
 
 /// Implements `FromSchema` for a primitive JSON type.
 macro_rules! impl_from_schema_primitive {
     ( $impl_ty:ty, $json_ty:literal ) => {
         impl FromSchema for $impl_ty {
-            fn from_schema(value: &Value, _info: &mut FieldInfo) -> Result<Self, FromSchemaError> {
+            fn from_schema(
+                value: &Value,
+                _info: &mut FieldInfo,
+            ) -> Result<Self, SchemaStructError> {
                 assert_value_type(value, $json_ty)?;
 
                 let default = value.get("default").map(ToOwned::to_owned);
@@ -31,7 +34,7 @@ impl_from_schema_primitive!(NumberField, "number");
 impl_from_schema_primitive!(StringField, "string");
 
 impl FromSchema for ArrayField {
-    fn from_schema(value: &Value, info: &mut FieldInfo) -> Result<Self, FromSchemaError> {
+    fn from_schema(value: &Value, info: &mut FieldInfo) -> Result<Self, SchemaStructError> {
         assert_value_type(value, "array")?;
 
         get_prop_obj(value, "items")?.ok_or("array must have property `items`")?;
@@ -46,7 +49,7 @@ impl FromSchema for ArrayField {
 }
 
 impl FromSchema for ObjectField {
-    fn from_schema(value: &Value, _info: &mut FieldInfo) -> Result<Self, FromSchemaError> {
+    fn from_schema(value: &Value, _info: &mut FieldInfo) -> Result<Self, SchemaStructError> {
         assert_value_type(value, "object")?;
 
         let empty_map = Map::new();
@@ -85,7 +88,7 @@ impl FromSchema for ObjectField {
 }
 
 impl FromSchema for EnumField {
-    fn from_schema(value: &Value, _info: &mut FieldInfo) -> Result<Self, FromSchemaError> {
+    fn from_schema(value: &Value, _info: &mut FieldInfo) -> Result<Self, SchemaStructError> {
         let variant_values = get_prop_array(value, "enum")?.ok_or("no enum variants specified")?;
 
         let variants = variant_values
@@ -105,7 +108,7 @@ impl FromSchema for EnumField {
 }
 
 impl FromSchema for TupleField {
-    fn from_schema(value: &Value, info: &mut FieldInfo) -> Result<Self, FromSchemaError> {
+    fn from_schema(value: &Value, info: &mut FieldInfo) -> Result<Self, SchemaStructError> {
         assert_value_type(value, "array")?;
 
         let tuple_items = get_prop_array(value, "prefixItems")?
@@ -132,7 +135,7 @@ impl FromSchema for TupleField {
 }
 
 impl FromSchema for RefField {
-    fn from_schema(value: &Value, _info: &mut FieldInfo) -> Result<Self, FromSchemaError> {
+    fn from_schema(value: &Value, _info: &mut FieldInfo) -> Result<Self, SchemaStructError> {
         let ref_path = get_prop_str(value, "$ref")?.ok_or("refs must specify `$ref` property")?;
         let path = ref_path.split('/').map(|s| s.to_owned()).collect();
         let default = value.get("default").map(ToOwned::to_owned);
@@ -142,7 +145,7 @@ impl FromSchema for RefField {
 }
 
 impl FromSchema for FieldType {
-    fn from_schema(value: &Value, info: &mut FieldInfo) -> Result<Self, FromSchemaError> {
+    fn from_schema(value: &Value, info: &mut FieldInfo) -> Result<Self, SchemaStructError> {
         Ok(match parse_value_type(value)? {
             ValueType::Null => Self::Null(NullField::from_schema(value, info)?),
             ValueType::Boolean => Self::Boolean(BooleanField::from_schema(value, info)?),
@@ -159,7 +162,7 @@ impl FromSchema for FieldType {
 }
 
 impl FromSchema for Field {
-    fn from_schema(value: &Value, info: &mut FieldInfo) -> Result<Self, FromSchemaError> {
+    fn from_schema(value: &Value, info: &mut FieldInfo) -> Result<Self, SchemaStructError> {
         let description = get_prop_str(value, "description")?.map(|s| s.to_owned());
         let mut field_info = FieldInfo {
             description,
@@ -175,7 +178,7 @@ impl FromSchema for Field {
 }
 
 impl FromSchema for Subschema {
-    fn from_schema(value: &Value, info: &mut FieldInfo) -> Result<Self, FromSchemaError> {
+    fn from_schema(value: &Value, info: &mut FieldInfo) -> Result<Self, SchemaStructError> {
         Ok(Self {
             schema: Field::from_schema(value, info)?,
         })
