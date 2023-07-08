@@ -41,7 +41,11 @@ impl FromSchema for ArrayField {
         let items_value = value
             .get("items")
             .ok_or("array must have property `items`")?;
-        let items = Field::from_schema(items_value, info)?;
+        let mut items_info = FieldInfo {
+            required: true,
+            ..info.clone()
+        };
+        let items = Field::from_schema(items_value, &mut items_info)?;
         let default = value.get("default").map(ToOwned::to_owned);
 
         Ok(Self { items, default })

@@ -304,7 +304,14 @@ impl ToStruct for ArrayField {
         ctx: &FieldContext,
     ) -> Result<FieldDef, SchemaStructError> {
         let (field_name, field_rename) = renamed_field(&info.name);
-        let inner_field_def = self.items.to_struct(info, ctx)?;
+
+        let inner_name_prefix = format!("{}Items", ctx.name_prefix);
+        let inner_ctx = FieldContext {
+            name_prefix: inner_name_prefix,
+            ..ctx.clone()
+        };
+
+        let inner_field_def = self.items.to_struct(info, &inner_ctx)?;
         let inner_field_ty = &inner_field_def.field_ty;
         let field_ty = maybe_optional(quote!(Vec<#inner_field_ty>), info.required);
         let mut defs = inner_field_def.defs;
@@ -342,6 +349,12 @@ impl ToStruct for ArrayField {
         info: &FieldInfo,
         ctx: &FieldContext,
     ) -> Result<Option<TokenStream>, SchemaStructError> {
+        let inner_name_prefix = format!("{}Items", ctx.name_prefix);
+        let inner_ctx = FieldContext {
+            name_prefix: inner_name_prefix,
+            ..ctx.clone()
+        };
+
         value
             .map(|default| {
                 default
@@ -350,7 +363,7 @@ impl ToStruct for ArrayField {
                     .and_then(|values| {
                         values
                             .iter()
-                            .map(|val| self.items.parse_default(Some(val), info, ctx))
+                            .map(|val| self.items.parse_default(Some(val), info, &inner_ctx))
                             .collect::<Result<Vec<_>, _>>()
                             .map(|defaults| {
                                 let defaults = defaults
@@ -755,7 +768,7 @@ impl ToStruct for TupleField {
                     .and_then(|values| {
                         if values.len() != self.items.len() {
                             return Err(
-                                "tuple and tuple default values have different lengths".into()
+                                "tuple definition and default values have different lengths".into(),
                             );
                         }
 
@@ -767,7 +780,9 @@ impl ToStruct for TupleField {
                                     .map(|inner| inner.unwrap_or(quote!(None)))
                             })
                             .collect::<Result<Vec<_>, _>>()
-                            .map(|defaults| quote!((#(#defaults),*)))
+                            .map(|defaults| {
+                                maybe_optional_value(quote!((#(#defaults),*)), info.required)
+                            })
                     })
             })
             .invert()

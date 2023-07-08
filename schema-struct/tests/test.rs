@@ -579,8 +579,8 @@ fn test_array_of_objects() {
     assert_eq!(
         value_with_array_of_objects.array_of_objects,
         vec![
-            SchemaWithArrayOfObjectsArrayOfObjects { object_id: 3 },
-            SchemaWithArrayOfObjectsArrayOfObjects { object_id: 7 }
+            SchemaWithArrayOfObjectsItemsArrayOfObjects { object_id: 3 },
+            SchemaWithArrayOfObjectsItemsArrayOfObjects { object_id: 7 }
         ]
     );
 
@@ -727,7 +727,7 @@ fn test_default_primitives() {
     schema_struct!(
         schema = {
             "$schema": "http://json-schema.org/draft-04/schema#",
-            "title": "SchemaWithDefaults",
+            "title": "SchemaWithDefaultPrimitives",
             "description": "A product from Acme's catalog",
             "type": "object",
             "properties": {
@@ -757,7 +757,7 @@ fn test_default_primitives() {
     );
 
     let product_json = "{\"null_prop\":null,\"boolean_prop\":true,\"integer_prop\":7,\"number_prop\":3.45,\"string_prop\":\"Hello, world!\"}";
-    let product = SchemaWithDefaults::from_str("{}").unwrap();
+    let product = SchemaWithDefaultPrimitives::from_str("{}").unwrap();
     assert_values_eq!(&product.to_str().unwrap(), product_json);
 
     assert!(product.boolean_prop);
@@ -769,30 +769,362 @@ fn test_default_primitives() {
 /// Test structs with default array fields.
 #[test]
 fn test_default_array() {
-    // TODO
+    schema_struct!(
+        schema = {
+            "$schema": "http://json-schema.org/draft-04/schema#",
+            "title": "SchemaWithDefaultArray",
+            "description": "A schema with a field of type `array`",
+            "type": "object",
+            "properties": {
+                "array_field": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    },
+                    "default": [7, 8, 9]
+                }
+            },
+            "required": ["array_field"]
+        }
+    );
+
+    let json = "{\"array_field\":[7,8,9]}";
+    let value = SchemaWithDefaultArray::from_str("{}").unwrap();
+    assert_values_eq!(&value.to_str().unwrap(), json);
+    assert_eq!(value.array_field, vec![7, 8, 9]);
 }
 
 /// Test structs with default object fields.
 #[test]
 fn test_default_object() {
-    // TODO
+    schema_struct!(
+        schema = {
+            "$schema": "http://json-schema.org/draft-04/schema#",
+            "title": "SchemaWithDefaultObject",
+            "description": "A schema with a field of type `object`",
+            "type": "object",
+            "properties": {
+                "object_field": {
+                    "type": "object",
+                    "properties": {
+                        "inner_field": {
+                            "type": "string"
+                        }
+                    },
+                    "required": ["inner_field"],
+                    "default": {
+                        "inner_field": "an inner object field"
+                    }
+                }
+            },
+            "required": ["object_field"]
+        }
+    );
+
+    let json_with_object = "{\"object_field\":{\"inner_field\":\"an inner object field\"}}";
+    let value_with_object = SchemaWithDefaultObject::from_str("{}").unwrap();
+    assert_values_eq!(&value_with_object.to_str().unwrap(), json_with_object);
+    assert_eq!(
+        value_with_object.object_field.inner_field,
+        "an inner object field"
+    );
 }
 
 /// Test structs with default enum fields.
 #[test]
 fn test_default_enum() {
-    // TODO
+    schema_struct!(
+        schema = {
+            "$schema": "http://json-schema.org/draft-04/schema#",
+            "title": "SchemaWithDefaultEnum",
+            "description": "A schema with an enum field",
+            "type": "object",
+            "properties": {
+                "enum_field": {
+                    "enum": ["first", "second", "third"],
+                    "default": "first"
+                }
+            },
+            "required": ["enum_field"]
+        }
+    );
+
+    let json = "{\"enum_field\":\"first\"}";
+    let value = SchemaWithDefaultEnum::from_str("{}").unwrap();
+    assert_values_eq!(&value.to_str().unwrap(), json);
+    assert!(matches!(
+        value.enum_field,
+        SchemaWithDefaultEnumEnumField::First
+    ));
 }
 
 /// Test structs with default tuple fields.
 #[test]
 fn test_default_tuple() {
-    // TODO
+    schema_struct!(
+        schema = {
+            "$schema": "http://json-schema.org/draft-04/schema#",
+            "title": "SchemaWithDefaultTuple",
+            "description": "A schema with a tuple field",
+            "type": "object",
+            "properties": {
+                "tuple_field": {
+                    "type": "array",
+                    "prefixItems": [
+                        {
+                            "type": "integer",
+                            "description": "The address number"
+                        },
+                        {
+                            "type": "string",
+                            "description": "The street name"
+                        },
+                        {
+                            "enum": ["Street", "Avenue", "Boulevard"],
+                            "description": "The street type"
+                        },
+                        {
+                            "enum": ["NW", "NE", "SW", "SE"],
+                            "description": "The city quadrant of the address"
+                        }
+                    ],
+                    "default": [1600, "Pennsylvania", "Avenue", "NW"]
+                }
+            },
+            "required": ["tuple_field"]
+        }
+    );
+
+    let json = "{\"tuple_field\":[1600,\"Pennsylvania\",\"Avenue\",\"NW\"]}";
+    let value = SchemaWithDefaultTuple::from_str("{}").unwrap();
+    assert_values_eq!(&value.to_str().unwrap(), json);
+    assert_eq!(value.tuple_field.0, 1600);
+    assert_eq!(value.tuple_field.1, "Pennsylvania".to_owned());
+    assert!(matches!(
+        value.tuple_field.2,
+        SchemaWithDefaultTupleTupleField2::Avenue
+    ));
+    assert!(matches!(
+        value.tuple_field.3,
+        SchemaWithDefaultTupleTupleField3::Nw
+    ));
 }
 
-/// Test structs with default subschemas.
+/// Test structs with default refs.
 #[test]
-fn test_default_subschema() {
+fn test_default_ref() {
+    schema_struct!(
+        schema = {
+            "$schema": "http://json-schema.org/draft-04/schema#",
+            "title": "SchemaWithDefaultRef",
+            "description": "A schema with ref fields",
+            "$defs": {
+                "objectWithStringArray": {
+                    "description": "An object containing a string array",
+                    "type": "object",
+                    "properties": {
+                        "inner_array": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "default": ["Hello,", "world!"]
+                        }
+                    },
+                    "required": ["inner_array"]
+                }
+            },
+            "type": "object",
+            "properties": {
+                "object_with_string_array_field": {
+                    "$ref": "#/definitions/objectWithStringArray"
+                }
+            },
+            "required": ["object_with_string_array_field"]
+        }
+    );
+
+    let json = "{\"object_with_string_array_field\":{\"inner_array\":[\"Hello,\",\"world!\"]}}";
+    let value = SchemaWithDefaultRef::from_str("{\"object_with_string_array_field\":{}}").unwrap();
+    assert_values_eq!(&value.to_str().unwrap(), json);
+    assert_eq!(
+        value.object_with_string_array_field,
+        Box::new(SchemaWithDefaultRefDefObjectWithStringArray {
+            inner_array: vec!["Hello,".to_owned(), "world!".to_owned()]
+        })
+    );
+
+    // TODO: test default on top-level subschema definition
+}
+
+/// Test structs with default arrays of objects.
+#[test]
+fn test_default_array_of_objects() {
+    schema_struct!(
+        schema = {
+            "$schema": "http://json-schema.org/draft-04/schema#",
+            "title": "SchemaWithDefaultArrayOfObjects",
+            "description": "A schema with arrays of objects",
+            "type": "object",
+            "properties": {
+                "array_of_objects": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "object_id": {
+                                "type": "integer",
+                                "default": 123
+                            }
+                        },
+                        "required": ["object_id"],
+                        "default": {
+                            "object_id": 456
+                        }
+                    },
+                    "default": [
+                        {
+                            "object_id": 789
+                        }
+                    ]
+                }
+            },
+            "required": ["array_of_objects"]
+        }
+    );
+
+    let json1 = "{\"array_of_objects\":[{\"object_id\":789}]}";
+    let value1 = SchemaWithDefaultArrayOfObjects::from_str("{}").unwrap();
+    assert_values_eq!(&value1.to_str().unwrap(), json1);
+    assert_eq!(
+        value1.array_of_objects,
+        vec![SchemaWithDefaultArrayOfObjectsItemsArrayOfObjects { object_id: 789 }]
+    );
+
+    let json2 = "{\"array_of_objects\":[{\"object_id\":123}]}";
+    let value2 = SchemaWithDefaultArrayOfObjects::from_str("{\"array_of_objects\":[{}]}").unwrap();
+    assert_values_eq!(&value2.to_str().unwrap(), json2);
+    assert_eq!(
+        value2.array_of_objects,
+        vec![SchemaWithDefaultArrayOfObjectsItemsArrayOfObjects { object_id: 123 }]
+    );
+}
+
+/// Test structs with default nested arrays.
+#[test]
+fn test_default_nested_arrays() {
+    schema_struct!(
+        schema = {
+            "$schema": "http://json-schema.org/draft-04/schema#",
+            "title": "SchemaWithDefaultNestedArrays",
+            "description": "A schema with nested arrays",
+            "type": "object",
+            "properties": {
+                "nested_arrays": {
+                    "description": "This should be defined as `Vec<Vec<Vec<...>>>`",
+                    "type": "array",
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "type": "array",
+                            "items": {
+                                "type": "integer",
+                                "default": 123
+                            },
+                            "default": [234]
+                        },
+                        "default": [[345]]
+                    },
+                    "default": [[[456]]]
+                }
+            },
+            "required": ["nested_arrays"]
+        }
+    );
+
+    let json = "{\"nested_arrays\":[[[456]]]}";
+    let value = SchemaWithDefaultNestedArrays::from_str("{}").unwrap();
+    assert_values_eq!(&value.to_str().unwrap(), json);
+    assert_eq!(value.nested_arrays, vec![vec![vec![456]]]);
+}
+
+/// Test structs with default nested objects.
+#[test]
+fn test_default_nested_objects() {
+    schema_struct!(
+        schema = {
+            "$schema": "http://json-schema.org/draft-04/schema#",
+            "title": "SchemaWithDefaultNestedObjects",
+            "description": "A schema with nested objects",
+            "type": "object",
+            "properties": {
+                "foo": {
+                    "type": "object",
+                    "properties": {
+                        "bar": {
+                            "type": "object",
+                            "properties": {
+                                "baz": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "default": "one"
+                                        }
+                                    },
+                                    "required": ["message"],
+                                    "default": {
+                                        "message": "two"
+                                    }
+                                }
+                            },
+                            "required": ["baz"],
+                            "default": {
+                                "baz": {
+                                    "message": "three"
+                                }
+                            }
+                        }
+                    },
+                    "required": ["bar"],
+                    "default": {
+                        "bar": {
+                            "baz": {
+                                "message": "four"
+                            }
+                        }
+                    }
+                }
+            },
+            "required": ["foo"]
+        }
+    );
+
+    let json1 = "{\"foo\":{\"bar\":{\"baz\":{\"message\":\"one\"}}}}";
+    let value1 =
+        SchemaWithDefaultNestedObjects::from_str("{\"foo\":{\"bar\":{\"baz\":{}}}}").unwrap();
+    assert_values_eq!(&value1.to_str().unwrap(), json1);
+    assert_eq!(value1.foo.bar.baz.message, "one");
+
+    let json2 = "{\"foo\":{\"bar\":{\"baz\":{\"message\":\"two\"}}}}";
+    let value2 = SchemaWithDefaultNestedObjects::from_str("{\"foo\":{\"bar\":{}}}").unwrap();
+    assert_values_eq!(&value2.to_str().unwrap(), json2);
+    assert_eq!(value2.foo.bar.baz.message, "two");
+
+    let json3 = "{\"foo\":{\"bar\":{\"baz\":{\"message\":\"three\"}}}}";
+    let value3 = SchemaWithDefaultNestedObjects::from_str("{\"foo\":{}}").unwrap();
+    assert_values_eq!(&value3.to_str().unwrap(), json3);
+    assert_eq!(value3.foo.bar.baz.message, "three");
+
+    let json4 = "{\"foo\":{\"bar\":{\"baz\":{\"message\":\"four\"}}}}";
+    let value4 = SchemaWithDefaultNestedObjects::from_str("{}").unwrap();
+    assert_values_eq!(&value4.to_str().unwrap(), json4);
+    assert_eq!(value4.foo.bar.baz.message, "four");
+}
+
+/// Test structs with default values propagated through objects.
+#[test]
+fn test_default_propagation() {
     // TODO
 }
 
@@ -826,6 +1158,48 @@ fn test_default_optional() {
                     "type": "string",
                     "default": "Hello, world!"
                 },
+                "array_prop": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer",
+                        "default": 0
+                    },
+                    "default": [1, 2, 3]
+                },
+                "object_prop": {
+                    "type": "object",
+                    "properties": {
+                        "message": {
+                            "type": "string",
+                            "default": "Hello, string!"
+                        }
+                    },
+                    "default": {
+                        "message": "Hello, object!"
+                    }
+                },
+                "enum_prop": {
+                    "enum": ["a", "b", "c"],
+                    "default": "c"
+                },
+                "tuple_prop": {
+                    "type": "array",
+                    "prefixItems": [
+                        {
+                            "type": "integer",
+                            "default": 1970
+                        },
+                        {
+                            "type": "string",
+                            "default": "January"
+                        },
+                        {
+                            "type": "integer",
+                            "default": 1
+                        }
+                    ],
+                    "default": [2020, "June", 27]
+                },
                 "optional_prop_without_default": {
                     "type": "integer"
                 }
@@ -833,7 +1207,7 @@ fn test_default_optional() {
         }
     );
 
-    let product_json = "{\"null_prop\":null,\"boolean_prop\":true,\"integer_prop\":7,\"number_prop\":3.45,\"string_prop\":\"Hello, world!\",\"optional_prop_without_default\":null}";
+    let product_json = "{\"null_prop\":null,\"boolean_prop\":true,\"integer_prop\":7,\"number_prop\":3.45,\"string_prop\":\"Hello, world!\",\"array_prop\":[1,2,3],\"object_prop\":{\"message\":\"Hello, object!\"},\"enum_prop\":\"c\",\"tuple_prop\":[2020,\"June\",27],\"optional_prop_without_default\":null}";
     let product = SchemaWithOptionalDefaults::from_str("{}").unwrap();
     assert_values_eq!(&product.to_str().unwrap(), product_json);
 
@@ -841,9 +1215,21 @@ fn test_default_optional() {
     assert_eq!(product.integer_prop, Some(7));
     assert_eq!(product.number_prop, Some(3.45));
     assert_eq!(product.string_prop, Some("Hello, world!".to_owned()));
+    assert_eq!(product.array_prop, Some(vec![1, 2, 3]));
+    assert_eq!(
+        product.object_prop,
+        Some(SchemaWithOptionalDefaultsObjectProp {
+            message: Some("Hello, object!".to_owned())
+        })
+    );
+    assert_eq!(
+        product.enum_prop,
+        Some(SchemaWithOptionalDefaultsEnumProp::C)
+    );
+    assert_eq!(product.tuple_prop, Some((2020, "June".to_owned(), 27)));
     assert_eq!(product.optional_prop_without_default, None);
 
-    // TODO: add optional arrays, objects, enums, tuples, and subschemas
+    // TODO: add optional refs
 }
 
 /// Test struct visibility configuration.
