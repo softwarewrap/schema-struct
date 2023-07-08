@@ -25,6 +25,7 @@ pub enum ValueType {
 }
 
 impl ValueType {
+    /// Parses the value type from a string.
     pub fn from_str(s: &str) -> Result<Self, SchemaStructError> {
         Ok(match s {
             "null" => Self::Null,
@@ -55,6 +56,46 @@ pub struct FieldInfo {
     pub required: bool,
     /// Whether the field is a subschema definition.
     pub subschema: bool,
+}
+
+/// A reference type.
+#[derive(Debug, Clone)]
+pub enum RefType {
+    /// A reference to the root object.
+    Root,
+    /// A reference to a subschema.
+    Subschema(String),
+}
+
+impl RefType {
+    /// Parses a reference type from the reference path.
+    pub fn from_path(path: &str) -> Result<Self, SchemaStructError> {
+        match path {
+            "#" => Ok(Self::Root),
+            path => {
+                let segments = path.split('/').collect::<Vec<_>>();
+
+                match &segments[..] {
+                    &["#", "$defs", subschema_name] | &["#", "definitions", subschema_name] => {
+                        Ok(Self::Subschema(subschema_name.to_owned()))
+                    }
+                    _ => {
+                        Err("ref paths must either reference the root object or a subschema".into())
+                    }
+                }
+            }
+        }
+    }
+
+    /// Gets the name of the referenced type.
+    pub fn name(&self, root_name: &str) -> String {
+        match self {
+            Self::Root => root_name.to_owned(),
+            Self::Subschema(subschema_name) => {
+                renamed_struct(&format!("{}_def_{}", root_name, subschema_name))
+            }
+        }
+    }
 }
 
 /// A null field.
@@ -131,8 +172,8 @@ pub struct TupleField {
 /// A reference field.
 #[derive(Debug, Clone)]
 pub struct RefField {
-    /// The reference path segments.
-    pub path: Vec<String>,
+    /// The reference type.
+    pub ty: RefType,
     /// The default value.
     pub default: Option<Value>,
 }
@@ -150,6 +191,29 @@ pub enum FieldType {
     Enum(EnumField),
     Tuple(TupleField),
     Ref(RefField),
+}
+
+impl FieldType {
+    /// Does this field type define new types?
+    pub fn creates_defs(&self) -> bool {
+        matches!(self, Self::Object(_) | Self::Enum(_))
+    }
+
+    /// Gets the inner default value of this field.
+    pub fn inner_default(&self) -> Option<&Value> {
+        match self {
+            Self::Null(field) => field.default.as_ref(),
+            Self::Boolean(field) => field.default.as_ref(),
+            Self::Integer(field) => field.default.as_ref(),
+            Self::Number(field) => field.default.as_ref(),
+            Self::String(field) => field.default.as_ref(),
+            Self::Array(field) => field.default.as_ref(),
+            Self::Object(field) => field.default.as_ref(),
+            Self::Enum(field) => field.default.as_ref(),
+            Self::Tuple(field) => field.default.as_ref(),
+            Self::Ref(field) => field.default.as_ref(),
+        }
+    }
 }
 
 /// A field in a schema.

@@ -919,42 +919,75 @@ fn test_default_ref() {
             "title": "SchemaWithDefaultRef",
             "description": "A schema with ref fields",
             "$defs": {
-                "objectWithStringArray": {
-                    "description": "An object containing a string array",
+                "myDef": {
                     "type": "object",
                     "properties": {
-                        "inner_array": {
-                            "type": "array",
-                            "items": {
-                                "type": "string"
-                            },
-                            "default": ["Hello,", "world!"]
+                        "inner": {
+                            "type": "integer",
+                            "default": 1
                         }
                     },
-                    "required": ["inner_array"]
+                    "required": ["inner"],
+                    "default": {
+                        "inner": 2
+                    }
                 }
             },
             "type": "object",
             "properties": {
-                "object_with_string_array_field": {
-                    "$ref": "#/definitions/objectWithStringArray"
+                "my_def_field": {
+                    "$ref": "#/definitions/myDef"
+                },
+                "self_ref_field": {
+                    "type": "object",
+                    "properties": {
+                        "self_ref_field_inner": {
+                            "$ref": "#"
+                        }
+                    },
+                    "default": {}
                 }
             },
-            "required": ["object_with_string_array_field"]
+            "required": ["my_def_field", "self_ref_field"],
+            "default": {
+                "my_def_field": {
+                    "inner": 3
+                },
+                "self_ref_field": {}
+            }
         }
     );
 
-    let json = "{\"object_with_string_array_field\":{\"inner_array\":[\"Hello,\",\"world!\"]}}";
-    let value = SchemaWithDefaultRef::from_str("{\"object_with_string_array_field\":{}}").unwrap();
-    assert_values_eq!(&value.to_str().unwrap(), json);
+    let json1 =
+        "{\"my_def_field\":{\"inner\":2},\"self_ref_field\":{\"self_ref_field_inner\":null}}";
+    let value1 = SchemaWithDefaultRef::from_str("{}").unwrap();
+    assert_values_eq!(&value1.to_str().unwrap(), json1);
     assert_eq!(
-        value.object_with_string_array_field,
-        Box::new(SchemaWithDefaultRefDefObjectWithStringArray {
-            inner_array: vec!["Hello,".to_owned(), "world!".to_owned()]
-        })
+        value1.my_def_field,
+        Box::new(SchemaWithDefaultRefDefMyDef { inner: 2 })
     );
 
-    // TODO: test default on top-level subschema definition
+    let json2 =
+        "{\"my_def_field\":{\"inner\":1},\"self_ref_field\":{\"self_ref_field_inner\":null}}";
+    let value2 = SchemaWithDefaultRef::from_str("{\"my_def_field\":{}}").unwrap();
+    assert_values_eq!(&value2.to_str().unwrap(), json2);
+    assert_eq!(
+        value2.my_def_field,
+        Box::new(SchemaWithDefaultRefDefMyDef { inner: 1 })
+    );
+
+    let json3 = "{\"my_def_field\":{\"inner\":2},\"self_ref_field\":{\"self_ref_field_inner\":{\"my_def_field\":{\"inner\":3},\"self_ref_field\":{\"self_ref_field_inner\":null}}}}";
+    let value3 = SchemaWithDefaultRef::from_str("{\"self_ref_field\":{}}").unwrap();
+    assert_values_eq!(&value3.to_str().unwrap(), json3);
+    assert_eq!(
+        value3.self_ref_field.self_ref_field_inner,
+        Some(Box::new(SchemaWithDefaultRef {
+            my_def_field: Box::new(SchemaWithDefaultRefDefMyDef { inner: 3 }),
+            self_ref_field: SchemaWithDefaultRefSelfRefField {
+                self_ref_field_inner: None
+            }
+        }))
+    );
 }
 
 /// Test structs with default arrays of objects.
@@ -1137,6 +1170,12 @@ fn test_default_optional() {
             "title": "SchemaWithOptionalDefaults",
             "description": "A product from Acme's catalog",
             "type": "object",
+            "$defs": {
+                "myDef": {
+                    "type": "integer",
+                    "default": 9
+                }
+            },
             "properties": {
                 "null_prop": {
                     "type": "null",
@@ -1200,6 +1239,9 @@ fn test_default_optional() {
                     ],
                     "default": [2020, "June", 27]
                 },
+                "ref_prop": {
+                    "$ref": "#/definitions/myDef"
+                },
                 "optional_prop_without_default": {
                     "type": "integer"
                 }
@@ -1207,7 +1249,7 @@ fn test_default_optional() {
         }
     );
 
-    let product_json = "{\"null_prop\":null,\"boolean_prop\":true,\"integer_prop\":7,\"number_prop\":3.45,\"string_prop\":\"Hello, world!\",\"array_prop\":[1,2,3],\"object_prop\":{\"message\":\"Hello, object!\"},\"enum_prop\":\"c\",\"tuple_prop\":[2020,\"June\",27],\"optional_prop_without_default\":null}";
+    let product_json = "{\"null_prop\":null,\"boolean_prop\":true,\"integer_prop\":7,\"number_prop\":3.45,\"string_prop\":\"Hello, world!\",\"array_prop\":[1,2,3],\"object_prop\":{\"message\":\"Hello, object!\"},\"enum_prop\":\"c\",\"tuple_prop\":[2020,\"June\",27],\"ref_prop\":9,\"optional_prop_without_default\":null}";
     let product = SchemaWithOptionalDefaults::from_str("{}").unwrap();
     assert_values_eq!(&product.to_str().unwrap(), product_json);
 
@@ -1227,9 +1269,8 @@ fn test_default_optional() {
         Some(SchemaWithOptionalDefaultsEnumProp::C)
     );
     assert_eq!(product.tuple_prop, Some((2020, "June".to_owned(), 27)));
+    assert_eq!(product.ref_prop, Some(Box::new(9)));
     assert_eq!(product.optional_prop_without_default, None);
-
-    // TODO: add optional refs
 }
 
 /// Test struct visibility configuration.

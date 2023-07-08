@@ -141,10 +141,10 @@ impl FromSchema for TupleField {
 impl FromSchema for RefField {
     fn from_schema(value: &Value, _info: &mut FieldInfo) -> Result<Self, SchemaStructError> {
         let ref_path = get_prop_str(value, "$ref")?.ok_or("refs must specify `$ref` property")?;
-        let path = ref_path.split('/').map(|s| s.to_owned()).collect();
+        let ty = RefType::from_path(ref_path)?;
         let default = value.get("default").map(ToOwned::to_owned);
 
-        Ok(Self { path, default })
+        Ok(Self { ty, default })
     }
 }
 

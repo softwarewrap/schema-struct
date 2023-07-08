@@ -210,31 +210,6 @@ pub fn renamed_function(name: &str) -> String {
     renamed_field(name).0
 }
 
-/// Gets the name of the identifier referenced in a ref field.
-pub fn ref_name(path: &[String], root_name: &str) -> String {
-    let mut path = path.to_owned();
-
-    if path.is_empty() {
-        return root_name.to_owned();
-    }
-
-    if let Some(name) = path.get_mut(0) {
-        if name == "#" {
-            *name = root_name.to_owned();
-        }
-    }
-
-    if let Some(name) = path.get_mut(1) {
-        if name == "$defs" || name == "definitions" {
-            *name = "def".to_owned();
-        }
-    }
-
-    let path_joined = path.join("_");
-
-    renamed_struct(&path_joined)
-}
-
 /// Generates a name for a function providing a default value.
 pub fn default_fn_name(name_prefix: &str, name: &str) -> String {
     renamed_function(&format!("{}_{}_default", name_prefix, name))
@@ -292,6 +267,7 @@ pub fn default_attribute(maybe_default: Option<&str>) -> TokenStream {
 
 /// Inverts wrapped generic types.
 pub trait Invert<T> {
+    /// Performs the type inversion.
     fn invert(self) -> T;
 }
 

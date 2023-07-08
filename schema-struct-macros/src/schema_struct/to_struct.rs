@@ -796,28 +796,94 @@ impl ToStruct for RefField {
         ctx: &FieldContext,
     ) -> Result<FieldDef, SchemaStructError> {
         let (field_name, field_rename) = renamed_field(&info.name);
-        let inner_schema_name = ref_name(&self.path, &ctx.root_name);
+        let inner_schema_name = self.ty.name(&ctx.root_name);
         let inner_schema_ident = format_ident!("{}", inner_schema_name);
         let field_ty = maybe_optional(quote!(Box<#inner_schema_ident>), info.required);
+        let mut defs = Vec::new();
+
+        let field_default = self.parse_default(None, info, ctx)?.map(|default_value| {
+            let field_default = default_fn_name(&ctx.name_prefix, &info.name);
+            let field_default_ident = format_ident!("{}", field_default);
+            let fn_return = maybe_optional(quote!(Box<#inner_schema_ident>), info.required);
+
+            defs.push(quote! {
+                fn #field_default_ident() -> #fn_return {
+                    #default_value
+                }
+            });
+
+            field_default
+        });
 
         Ok(FieldDef {
             field_name,
             field_rename,
-            field_default: None,
+            field_default,
             field_doc: info.description.clone(),
             field_ty,
-            defs: vec![],
+            defs,
             defs_doc: vec![],
         })
     }
 
     fn parse_default(
         &self,
-        _value: Option<&Value>,
-        _info: &FieldInfo,
-        _ctx: &FieldContext,
+        value: Option<&Value>,
+        info: &FieldInfo,
+        ctx: &FieldContext,
     ) -> Result<Option<TokenStream>, SchemaStructError> {
-        Ok(None)
+        Ok(match &self.ty {
+            RefType::Root => {
+                let inner_info = FieldInfo {
+                    name: ctx.schema.name.clone(),
+                    description: ctx.schema.description.clone(),
+                    required: true,
+                    subschema: false,
+                };
+                let inner_ctx = FieldContext {
+                    name_prefix: String::new(),
+                    ..ctx.clone()
+                };
+
+                value
+                    .or(ctx.schema.root.default.as_ref())
+                    .map(|default| {
+                        ctx.schema
+                            .root
+                            .parse_default(Some(default), &inner_info, &inner_ctx)
+                            .map(|inner| inner.unwrap_or(quote!(None)))
+                    })
+                    .invert()
+            }
+            RefType::Subschema(subschema_name) => {
+                let inner_info = FieldInfo {
+                    name: subschema_name.clone(),
+                    description: None,
+                    required: true,
+                    subschema: true,
+                };
+                let inner_ctx = FieldContext {
+                    name_prefix: String::new(),
+                    ..ctx.clone()
+                };
+
+                ctx.schema
+                    .subschemas
+                    .get(subschema_name)
+                    .ok_or(format!("unknown subschema '{}'", subschema_name).into())
+                    .and_then(|subschema| {
+                        value
+                            .or(subschema.schema.ty.inner_default())
+                            .map(|default| {
+                                subschema
+                                    .parse_default(Some(default), &inner_info, &inner_ctx)
+                                    .map(|inner| inner.unwrap_or(quote!(None)))
+                            })
+                            .invert()
+                    })
+            }
+        }?
+        .map(|inner_default| maybe_optional_value(quote!(Box::new(#inner_default)), info.required)))
     }
 }
 
@@ -921,7 +987,7 @@ impl ToStruct for Subschema {
 
         let doc_attr = doc_attribute(field_doc.as_deref());
 
-        if defs.is_empty() {
+        if !self.schema.ty.creates_defs() {
             defs.push(quote! {
                 #doc_attr
                 #vis type #subschema_ident = #field_ty;
