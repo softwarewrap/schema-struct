@@ -537,10 +537,30 @@ impl ToStruct for ObjectField {
                                 let (renamed_field_name, _) = renamed_field(field_name);
 
                                 match values.get(field_name) {
-                                    Some(field_value) => field
-                                        .parse_default(Some(field_value), info, &inner_ctx)
-                                        .map(|inner| inner.unwrap_or(quote!(None))),
-                                    None => Ok(quote!(None)),
+                                    Some(field_value) => {
+                                        if field_value.is_null() {
+                                            Ok(quote!(None))
+                                        } else {
+                                            field
+                                                .parse_default(Some(field_value), info, &inner_ctx)
+                                                .map(|inner| inner.unwrap_or(quote!(None)))
+                                        }
+                                    },
+                                    None => {
+                                        if let Some(field_default) = field.ty.inner_default() {
+                                            field
+                                                .parse_default(
+                                                    Some(field_default),
+                                                    info,
+                                                    &inner_ctx,
+                                                )
+                                                .map(|inner| inner.unwrap_or(quote!(None)))
+                                        } else if !field.info.required {
+                                            Ok(quote!(None))
+                                        } else {
+                                            Err(format!("field '{}' is required but has no default value specified", field_name).into())
+                                        }
+                                    }
                                 }
                                 .map(|value_tokens| {
                                     let field_ident = format_ident!("{}", renamed_field_name);
@@ -766,9 +786,9 @@ impl ToStruct for TupleField {
                     .as_array()
                     .ok_or("expected default value to be a tuple array".into())
                     .and_then(|values| {
-                        if values.len() != self.items.len() {
+                        if values.len() > self.items.len() {
                             return Err(
-                                "tuple definition and default values have different lengths".into(),
+                                format!("tuple default values array is longer than defined tuple array '{}'", info.name).into(),
                             );
                         }
 
@@ -776,8 +796,20 @@ impl ToStruct for TupleField {
                             .iter()
                             .enumerate()
                             .map(|(index, item)| {
-                                item.parse_default(Some(&values[index]), &inner_info, ctx)
-                                    .map(|inner| inner.unwrap_or(quote!(None)))
+                                match values.get(index) {
+                                    Some(item_value) => {
+                                        item
+                                            .parse_default(Some(item_value), &inner_info, ctx)
+                                            .map(|inner| inner.unwrap_or(quote!(None)))
+                                    },
+                                    None => {
+                                        if let Some(item_default) = item.ty.inner_default() {
+                                            item.parse_default(Some(item_default), &inner_info, ctx).map(|inner| inner.unwrap_or(quote!(None)))
+                                        } else {
+                                            Err(format!("tuple '{}' at index {} has no default value specified", info.name, index).into())
+                                        }
+                                    }
+                                }
                             })
                             .collect::<Result<Vec<_>, _>>()
                             .map(|defaults| {

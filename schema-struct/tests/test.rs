@@ -1158,7 +1158,112 @@ fn test_default_nested_objects() {
 /// Test structs with default values propagated through objects.
 #[test]
 fn test_default_propagation() {
-    // TODO
+    schema_struct!(
+        schema = {
+            "$schema": "http://json-schema.org/draft-04/schema#",
+            "title": "SchemaWithPropagatedDefaults",
+            "type": "object",
+            "properties": {
+                "foo": {
+                    "type": "object",
+                    "properties": {
+                        "bar": {
+                            "type": "object",
+                            "properties": {
+                                "baz": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "default": "Hello, default propagation!"
+                                        }
+                                    },
+                                    "default": {}
+                                }
+                            },
+                            "default": {}
+                        }
+                    },
+                    "default": {}
+                },
+                "tuple_field": {
+                    "type": "array",
+                    "prefixItems": [
+                        {
+                            "type": "integer",
+                            "description": "The address number",
+                            "default": 1600
+                        },
+                        {
+                            "type": "string",
+                            "description": "The street name",
+                            "default": "Pennsylvania"
+                        },
+                        {
+                            "enum": ["Street", "Avenue", "Boulevard"],
+                            "description": "The street type",
+                            "default": "Avenue"
+                        },
+                        {
+                            "enum": ["NW", "NE", "SW", "SE"],
+                            "description": "The city quadrant of the address",
+                            "default": "NW"
+                        }
+                    ],
+                    "default": [2300]
+                },
+                "foo_with_null_default": {
+                    "type": "object",
+                    "properties": {
+                        "bar": {
+                            "type": "object",
+                            "properties": {
+                                "baz": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "default": "This should not propagate"
+                                        }
+                                    },
+                                    "default": {}
+                                }
+                            },
+                            "default": {
+                                "baz": null
+                            }
+                        }
+                    },
+                    "default": {}
+                }
+            }
+        }
+    );
+
+    let json1 = "{\"foo\":{\"bar\":{\"baz\":{\"message\":\"Hello, default propagation!\"}}},\"tuple_field\":[2300,\"Pennsylvania\",\"Avenue\",\"NW\"],\"foo_with_null_default\":{\"bar\":{\"baz\":null}}}";
+    let value1 = SchemaWithPropagatedDefaults::from_str("{}").unwrap();
+    assert_values_eq!(&value1.to_str().unwrap(), json1);
+    assert_eq!(
+        value1,
+        SchemaWithPropagatedDefaults {
+            foo: Some(SchemaWithPropagatedDefaultsFoo {
+                bar: Some(SchemaWithPropagatedDefaultsFooBar {
+                    baz: Some(SchemaWithPropagatedDefaultsFooBarBaz {
+                        message: Some("Hello, default propagation!".to_owned())
+                    })
+                })
+            }),
+            tuple_field: Some((
+                2300,
+                "Pennsylvania".to_owned(),
+                SchemaWithPropagatedDefaultsTupleField2::Avenue,
+                SchemaWithPropagatedDefaultsTupleField3::Nw
+            )),
+            foo_with_null_default: Some(SchemaWithPropagatedDefaultsFooWithNullDefault {
+                bar: Some(SchemaWithPropagatedDefaultsFooWithNullDefaultBar { baz: None })
+            })
+        }
+    );
 }
 
 /// Test structs with optional default fields.
