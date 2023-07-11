@@ -1423,6 +1423,48 @@ fn test_custom_ident() {
     assert_eq!(product.price, 12.34);
 }
 
+/// Test schema validation on deserialization.
+#[test]
+fn test_validation() {
+    schema_struct!(
+        validate = true,
+        schema = {
+            "$schema": "http://json-schema.org/draft-04/schema#",
+            "title": "Product",
+            "description": "A product from Acme's catalog",
+            "type": "object",
+            "properties": {
+                "id": {
+                    "description": "The unique identifier for a product",
+                    "type": "integer"
+                },
+                "name": {
+                    "description": "Name of the product",
+                    "type": "string"
+                },
+                "price": {
+                    "type": "number",
+                    "minimum": 0,
+                    "exclusiveMinimum": true
+                }
+            },
+            "required": ["id", "name", "price"]
+        }
+    );
+
+    let product_json = "{\"id\":5,\"name\":\"product name\",\"price\":12.34}";
+    let product = Product::from_str(product_json).unwrap();
+    assert_values_eq!(&product.to_str().unwrap(), product_json);
+
+    assert_eq!(product.id, 5);
+    assert_eq!(product.name, "product name".to_owned());
+    assert_eq!(product.price, 12.34);
+
+    let product_json_invalid = "{\"id\":5,\"name\":\"product name\",\"price\":-12.34}";
+    let product_invalid = Product::from_str(product_json_invalid);
+    assert!(product_invalid.is_err());
+}
+
 /// Test renaming structs and fields.
 #[test]
 fn test_renaming() {

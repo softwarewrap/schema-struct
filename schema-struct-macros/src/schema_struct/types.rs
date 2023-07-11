@@ -310,6 +310,8 @@ pub struct SchemaStructConfig {
     /// Whether to show the definitions of all generated items in the
     /// top-level struct definition.
     pub def: Option<bool>,
+    /// Whether to validate JSON values against the schema when deserializing.
+    pub validate: Option<bool>,
     /// The schema itself, in `serde_json::Value` representation.
     pub schema: Value,
 }
@@ -321,14 +323,23 @@ pub struct SchemaStructDef {
     pub name: String,
     /// The data structure description.
     pub description: Option<String>,
+    /// The data structure identifier.
+    pub ident: Ident,
     /// All type definitions and implementations associated with the schema.
     pub defs: Vec<TokenStream>,
     /// Simplified type definitions to be used in documentation.
     pub defs_doc: Option<Vec<TokenStream>>,
+    /// An optional schema to validate JSON values against when deserializing.
+    pub validate: Option<Value>,
+    /// The path to the internal module.
+    pub internal_path: TokenStream,
 }
 
 impl ToTokens for SchemaStructDef {
     fn to_tokens(&self, tokens: &mut TokenStream) {
+        let struct_ident = &self.ident;
+        let internal_path = &self.internal_path;
+
         let doc_description = self
             .description
             .as_ref()
@@ -348,8 +359,41 @@ impl ToTokens for SchemaStructDef {
 
         let doc_attr = doc_attribute(doc.as_deref());
 
-        let (main_impl, rest) = self.defs.split_last().unwrap();
+        let (_main_impl, rest) = self.defs.split_last().unwrap();
         let (main_def, pre_defs) = rest.split_last().unwrap();
+
+        let main_impl = match &self.validate {
+            None => quote! {
+                impl #struct_ident {
+                    /// Deserializes a JSON string into this type.
+                    pub fn from_str(json: &str) -> #internal_path::Result<Self> {
+                        #internal_path::deserialize(json)
+                    }
+
+                    /// Serializes this type into a JSON string.
+                    pub fn to_str(&self) -> #internal_path::Result<String> {
+                        #internal_path::serialize(self)
+                    }
+                }
+            },
+            Some(schema) => {
+                let schema_str = schema.to_string();
+
+                quote! {
+                    impl #struct_ident {
+                        /// Deserializes a JSON string into this type.
+                        pub fn from_str(json: &str) -> #internal_path::Result<Self> {
+                            #internal_path::deserialize_validate(json, #schema_str)
+                        }
+
+                        /// Serializes this type into a JSON string.
+                        pub fn to_str(&self) -> #internal_path::Result<String> {
+                            #internal_path::serialize(self)
+                        }
+                    }
+                }
+            }
+        };
 
         let def = quote! {
             #(#pre_defs)*
@@ -372,6 +416,8 @@ pub struct SchemaStruct {
     /// Whether to show the definitions of all generated items in the
     /// top-level data structure definition.
     pub def: bool,
+    /// An optional schema to validate JSON values against when deserializing.
+    pub validate: Option<Value>,
     /// The data structure's identifier name. If not specified, the schema
     /// title will be used.
     pub name: String,
@@ -390,6 +436,7 @@ impl SchemaStruct {
             vis,
             ident,
             def,
+            validate,
             schema,
         } = config;
 
@@ -434,6 +481,7 @@ impl SchemaStruct {
             vis: vis.unwrap_or(Visibility::Inherited),
             name,
             def: def.unwrap_or(true),
+            validate: validate.unwrap_or(false).then_some(schema),
             description,
             subschemas,
             root,
@@ -461,7 +509,7 @@ impl SchemaStruct {
             root_name: self.name.clone(),
             name_prefix: String::new(),
             vis: self.vis.clone(),
-            internal_path,
+            internal_path: internal_path.clone(),
         };
 
         let (mut defs, mut defs_doc) = self.subschemas.iter().try_fold(
@@ -484,11 +532,16 @@ impl SchemaStruct {
         defs.extend(root_def.defs);
         defs_doc.extend(root_def.defs_doc);
 
+        let ident = format_ident!("{}", renamed_struct(&self.name));
+
         Ok(SchemaStructDef {
             name: self.name.clone(),
             description: self.description.clone(),
+            ident,
             defs,
             defs_doc: self.def.then_some(defs_doc),
+            validate: self.validate.clone(),
+            internal_path,
         })
     }
 }

@@ -467,7 +467,7 @@ impl ToStruct for ObjectField {
 
         defs.push(quote! {
             #doc_attr
-            #[derive(#internal_path::serde::Serialize, #internal_path::serde::Deserialize, Debug, Clone, PartialEq)]
+            #[derive(#internal_path::Serialize, #internal_path::Deserialize, Debug, Clone, PartialEq)]
             #vis struct #struct_ident {
                 #(#field_tokens)*
             }
@@ -476,13 +476,13 @@ impl ToStruct for ObjectField {
         defs.push(quote! {
             impl #struct_ident {
                 /// Deserializes a JSON string into this type.
-                pub fn from_str(json: &str) -> #internal_path::serde_json::Result<Self> {
-                    #internal_path::serde_json::from_str(json)
+                pub fn from_str(json: &str) -> #internal_path::Result<Self> {
+                    #internal_path::deserialize(json)
                 }
 
                 /// Serializes this type into a JSON string.
-                pub fn to_str(&self) -> #internal_path::serde_json::Result<String> {
-                    #internal_path::serde_json::to_string(self)
+                pub fn to_str(&self) -> #internal_path::Result<String> {
+                    #internal_path::serialize(self)
                 }
             }
         });
@@ -642,7 +642,7 @@ impl ToStruct for EnumField {
 
         defs.push(quote! {
             #doc_attr
-            #[derive(#internal_path::serde::Serialize, #internal_path::serde::Deserialize, Debug, Clone, Copy, PartialEq)]
+            #[derive(#internal_path::Serialize, #internal_path::Deserialize, Debug, Clone, Copy, PartialEq)]
             #vis enum #enum_ident {
                 #(#variant_tokens)*
             }
@@ -651,13 +651,13 @@ impl ToStruct for EnumField {
         defs.push(quote! {
             impl #enum_ident {
                 /// Deserializes a JSON string into this type.
-                pub fn from_str(json: &str) -> #internal_path::serde_json::Result<Self> {
-                    #internal_path::serde_json::from_str(json)
+                pub fn from_str(json: &str) -> #internal_path::Result<Self> {
+                    #internal_path::deserialize(json)
                 }
 
                 /// Serializes this type into a JSON string.
-                pub fn to_str(&self) -> #internal_path::serde_json::Result<String> {
-                    #internal_path::serde_json::to_string(self)
+                pub fn to_str(&self) -> #internal_path::Result<String> {
+                    #internal_path::serialize(self)
                 }
             }
         });
