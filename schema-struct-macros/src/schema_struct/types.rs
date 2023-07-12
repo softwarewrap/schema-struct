@@ -312,6 +312,8 @@ pub struct SchemaStructConfig {
     pub def: Option<bool>,
     /// Whether to validate JSON values against the schema when deserializing.
     pub validate: Option<bool>,
+    /// Whether to log generated items to stdout.
+    pub debug: Option<bool>,
     /// The schema itself, in `serde_json::Value` representation.
     pub schema: Value,
 }
@@ -331,6 +333,8 @@ pub struct SchemaStructDef {
     pub defs_doc: Option<Vec<TokenStream>>,
     /// An optional schema to validate JSON values against when deserializing.
     pub validate: Option<Value>,
+    /// Whether to log generated items to stdout.
+    pub debug: bool,
     /// The path to the internal module.
     pub internal_path: TokenStream,
 }
@@ -404,6 +408,13 @@ impl ToTokens for SchemaStructDef {
             #main_impl
         };
 
+        if self.debug {
+            let mut all = pre_defs.to_vec();
+            all.push(main_def.clone());
+            all.push(main_impl);
+            println!("{}", pretty_print_token_stream(&all));
+        }
+
         tokens.append_all(def);
     }
 }
@@ -418,6 +429,8 @@ pub struct SchemaStruct {
     pub def: bool,
     /// An optional schema to validate JSON values against when deserializing.
     pub validate: Option<Value>,
+    /// Whether to log generated items to stdout.
+    pub debug: bool,
     /// The data structure's identifier name. If not specified, the schema
     /// title will be used.
     pub name: String,
@@ -437,6 +450,7 @@ impl SchemaStruct {
             ident,
             def,
             validate,
+            debug,
             schema,
         } = config;
 
@@ -479,9 +493,10 @@ impl SchemaStruct {
 
         Ok(Self {
             vis: vis.unwrap_or(Visibility::Inherited),
-            name,
             def: def.unwrap_or(true),
             validate: validate.unwrap_or(false).then_some(schema),
+            debug: debug.unwrap_or(false),
+            name,
             description,
             subschemas,
             root,
@@ -541,6 +556,7 @@ impl SchemaStruct {
             defs,
             defs_doc: self.def.then_some(defs_doc),
             validate: self.validate.clone(),
+            debug: self.debug,
             internal_path,
         })
     }

@@ -42,6 +42,7 @@ impl Parse for SchemaStructConfig {
         let mut schema_ident = None;
         let mut schema_def = None;
         let mut schema_validate = None;
+        let mut schema_debug = None;
 
         let schema_value = loop {
             let keyword = input.parse::<Ident>()?;
@@ -59,6 +60,9 @@ impl Parse for SchemaStructConfig {
                 }
                 "validate" => {
                     schema_validate = Some(input.parse::<LitBool>()?.value);
+                }
+                "debug" => {
+                    schema_debug = Some(input.parse::<LitBool>()?.value);
                 }
                 "schema" => {
                     let schema_tokens = input.parse::<TokenStream2>()?.to_string();
@@ -91,6 +95,7 @@ impl Parse for SchemaStructConfig {
             ident: schema_ident,
             def: schema_def,
             validate: schema_validate,
+            debug: schema_debug,
             schema: schema_value,
         })
     }
