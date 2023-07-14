@@ -10,7 +10,7 @@ test:
 	cargo test -- --nocapture
 
 lint:
-	cargy clippy -- -D warnings
+	cargo clippy -- -D warnings
 
 clean:
 	cargo clean
