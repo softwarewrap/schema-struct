@@ -1,7 +1,8 @@
 use super::types::*;
 use super::util::*;
+use indexmap::IndexMap;
 use serde_json::{Map, Value};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 /// Parses a JSON schema.
 pub trait FromSchema: Sized {
@@ -83,7 +84,7 @@ impl FromSchema for ObjectField {
                 Field::from_schema(property_value, &mut property_info)
                     .map(|parsed_value| (property_name.clone(), parsed_value))
             })
-            .collect::<Result<HashMap<_, _>, _>>()?;
+            .collect::<Result<IndexMap<_, _>, _>>()?;
 
         let default = value.get("default").map(ToOwned::to_owned);
 

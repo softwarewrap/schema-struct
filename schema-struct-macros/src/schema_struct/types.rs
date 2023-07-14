@@ -1,11 +1,11 @@
 use super::from_schema::FromSchema;
 use super::to_struct::ToStruct;
 use super::util::*;
+use indexmap::IndexMap;
 use proc_macro2::{Ident, TokenStream};
 use proc_macro_crate::{crate_name, FoundCrate};
 use quote::{format_ident, quote, ToTokens, TokenStreamExt};
 use serde_json::Value;
-use std::collections::HashMap;
 use std::fmt::Display;
 use syn::Visibility;
 
@@ -146,7 +146,7 @@ pub struct ArrayField {
 #[derive(Debug, Clone)]
 pub struct ObjectField {
     /// A mapping of the object's field names to values.
-    pub fields: HashMap<String, Field>,
+    pub fields: IndexMap<String, Field>,
     /// The default value.
     pub default: Option<Value>,
 }
@@ -437,7 +437,7 @@ pub struct SchemaStruct {
     /// The schema description.
     pub description: Option<String>,
     /// Subschemas defined by the schema.
-    pub subschemas: HashMap<String, Subschema>,
+    pub subschemas: IndexMap<String, Subschema>,
     /// The top-level schema object.
     pub root: ObjectField,
 }
@@ -479,9 +479,9 @@ impl SchemaStruct {
                         Subschema::from_schema(subschema_value, &mut subschema_info)
                             .map(|subschema| (subschema_name.clone(), subschema))
                     })
-                    .collect::<Result<HashMap<_, _>, _>>()
+                    .collect::<Result<IndexMap<_, _>, _>>()
             })
-            .unwrap_or(Ok(HashMap::new()))?;
+            .unwrap_or(Ok(IndexMap::new()))?;
 
         let mut field_info = FieldInfo {
             name: name.clone(),
