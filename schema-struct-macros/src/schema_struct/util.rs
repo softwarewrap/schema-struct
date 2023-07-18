@@ -5,6 +5,63 @@ use quote::quote;
 use regex::Regex;
 use serde_json::{Map, Value};
 
+const RUST_KEYWORDS: &[&str] = &[
+    "abstract",
+    "as",
+    "async",
+    "await",
+    "become",
+    "box",
+    "break",
+    "const",
+    "continue",
+    "crate",
+    "do",
+    "dyn",
+    "else",
+    "enum",
+    "extern",
+    "false",
+    "final",
+    "fn",
+    "for",
+    "if",
+    "impl",
+    "in",
+    "let",
+    "loop",
+    "macro",
+    "macro_rules",
+    "match",
+    "mod",
+    "move",
+    "mut",
+    "override",
+    "priv",
+    "pub",
+    "ref",
+    "return",
+    "self",
+    "Self",
+    "static",
+    "struct",
+    "super",
+    "trait",
+    "true",
+    "try",
+    "type",
+    "typeof",
+    "union",
+    "unsafe",
+    "unsized",
+    "use",
+    "virtual",
+    "where",
+    "while",
+    "yield",
+    "'static",
+];
+
 /// Retrieves a null property from a JSON value.
 #[allow(dead_code)]
 pub fn get_prop_null(value: &Value, prop: &str) -> Result<Option<()>, String> {
@@ -144,6 +201,14 @@ pub fn pretty_print_token_stream(tokenstreams: &[TokenStream]) -> String {
     prettyplease::unparse(&file)
 }
 
+pub fn renamed_rust_keyword(name: &str) -> String {
+    if RUST_KEYWORDS.contains(&name) {
+        format!("{}_", name)
+    } else {
+        name.to_owned()
+    }
+}
+
 /// Takes a JSON property name and returns a valid version of the property,
 /// along with the unchanged property name to be used in renaming during
 /// serialization.
@@ -158,13 +223,15 @@ pub fn renamed_field(name: &str) -> (String, Option<String>) {
         .filter_map(|c| (c.is_ascii_alphanumeric() || c == '_').then_some(c))
         .collect::<String>();
 
-    let orig = if renamed_alphanumeric == name {
+    let renamed_keyword = renamed_rust_keyword(&renamed_alphanumeric);
+
+    let orig = if renamed_keyword == name {
         None
     } else {
         Some(name.to_owned())
     };
 
-    (renamed_alphanumeric, orig)
+    (renamed_keyword, orig)
 }
 
 /// Takes a JSON object name and returns a valid struct name for the object.
@@ -174,10 +241,14 @@ pub fn renamed_struct(name: &str) -> String {
 
     let renamed_pascal_case = renamed_without_leading_digits.to_case(Case::Pascal);
 
-    renamed_pascal_case
+    let renamed_alphanumeric = renamed_pascal_case
         .chars()
         .filter_map(|c| (c.is_ascii_alphanumeric()).then_some(c))
-        .collect::<String>()
+        .collect::<String>();
+
+    let renamed_pascal_case_again = renamed_alphanumeric.to_case(Case::Pascal);
+
+    renamed_rust_keyword(&renamed_pascal_case_again)
 }
 
 /// Takes a JSON object name and returns a valid enum name for the object.
