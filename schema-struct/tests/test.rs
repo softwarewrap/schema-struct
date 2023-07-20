@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 use schema_struct::schema_struct;
+use serde_json::json;
 
 macro_rules! assert_values_eq {
     ( $left:expr, $right:expr ) => {
@@ -1556,19 +1557,35 @@ fn test_serializing() {
     let value1 = SchemaWithNestedObjects::from_str(json1).unwrap();
     assert_values_eq!(&value1.to_str().unwrap(), json1);
     assert_eq!(value1.foo.bar.baz.message, "Hello, nested object 1!");
+    let json1 = json!({ "foo": { "bar": { "baz": { "message": "Hello, nested object 1!" } } } });
+    let value1 = SchemaWithNestedObjects::from_value(&json1).unwrap();
+    assert_eq!(value1.to_value().unwrap(), json1);
+    assert_eq!(value1.foo.bar.baz.message, "Hello, nested object 1!");
 
     let json2 = "{\"bar\":{\"baz\":{\"message\":\"Hello, nested object 2!\"}}}";
     let value2 = SchemaWithNestedObjectsFoo::from_str(json2).unwrap();
     assert_values_eq!(&value2.to_str().unwrap(), json2);
+    assert_eq!(value2.bar.baz.message, "Hello, nested object 2!");
+    let json2 = json!({ "bar": { "baz": { "message": "Hello, nested object 2!" } } });
+    let value2 = SchemaWithNestedObjectsFoo::from_value(&json2).unwrap();
+    assert_eq!(value2.to_value().unwrap(), json2);
     assert_eq!(value2.bar.baz.message, "Hello, nested object 2!");
 
     let json3 = "{\"baz\":{\"message\":\"Hello, nested object 3!\"}}";
     let value3 = SchemaWithNestedObjectsFooBar::from_str(json3).unwrap();
     assert_values_eq!(&value3.to_str().unwrap(), json3);
     assert_eq!(value3.baz.message, "Hello, nested object 3!");
+    let json3 = json!({ "baz": { "message": "Hello, nested object 3!" } });
+    let value3 = SchemaWithNestedObjectsFooBar::from_value(&json3).unwrap();
+    assert_eq!(value3.to_value().unwrap(), json3);
+    assert_eq!(value3.baz.message, "Hello, nested object 3!");
 
     let json4 = "{\"message\":\"Hello, nested object 4!\"}";
     let value4 = SchemaWithNestedObjectsFooBarBaz::from_str(json4).unwrap();
     assert_values_eq!(&value4.to_str().unwrap(), json4);
+    assert_eq!(value4.message, "Hello, nested object 4!");
+    let json4 = json!({ "message": "Hello, nested object 4!" });
+    let value4 = SchemaWithNestedObjectsFooBarBaz::from_value(&json4).unwrap();
+    assert_eq!(value4.to_value().unwrap(), json4);
     assert_eq!(value4.message, "Hello, nested object 4!");
 }

@@ -484,6 +484,16 @@ impl ToStruct for ObjectField {
                 pub fn to_str(&self) -> #internal_path::Result<String> {
                     #internal_path::serialize(self)
                 }
+
+                /// Deserializes a JSON value into this type.
+                pub fn from_value(value: &#internal_path::Value) -> #internal_path::Result<Self> {
+                    #internal_path::deserialize_from_value(value.to_owned())
+                }
+
+                /// Serializes this type into a JSON value.
+                pub fn to_value(&self) -> #internal_path::Result<#internal_path::Value> {
+                    #internal_path::serialize_to_value(self)
+                }
             }
         });
 
@@ -658,6 +668,16 @@ impl ToStruct for EnumField {
                 /// Serializes this type into a JSON string.
                 pub fn to_str(&self) -> #internal_path::Result<String> {
                     #internal_path::serialize(self)
+                }
+
+                /// Deserializes a JSON value into this type.
+                pub fn from_value(value: &#internal_path::Value) -> #internal_path::Result<Self> {
+                    #internal_path::deserialize_from_value(value.to_owned())
+                }
+
+                /// Serializes this type into a JSON value.
+                pub fn to_value(&self) -> #internal_path::Result<#internal_path::Value> {
+                    #internal_path::serialize_to_value(self)
                 }
             }
         });

@@ -65,6 +65,7 @@ mod internal;
 pub mod __internal {
     pub use crate::internal::*;
     pub use serde::{Deserialize, Serialize};
+    pub use serde_json::Value;
 }
 
 pub use schema_struct_macros::schema_struct;
