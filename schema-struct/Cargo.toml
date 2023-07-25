@@ -1,6 +1,9 @@
 [package]
 name = "schema-struct"
 version = "0.1.0"
+authors = ["WKHAllen <wkhallen@gmail.com>"]
+description = "Generate Rust struct definitions from JSON schemas at compile-time."
+repository = "https://github.com/softwarewrap/schema-struct"
 edition = "2021"
 
 [dependencies]
